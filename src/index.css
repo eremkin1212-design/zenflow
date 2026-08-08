@@ -1,0 +1,84 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,340..600;1,9..144,400..500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #f2ede2;
+  --surface: #fbf9f3;
+  --surface-alt: #efe8d8;
+  --ink: #20261f;
+  --ink-soft: #5b6459;
+  --line: #dfd6c1;
+  --moss: #5c7a5f;
+  --moss-soft: #dce6dc;
+  --clay: #b27c64;
+  --clay-soft: #f0ddd3;
+  --nav-bg: #fbf9f3;
+  --now: #c6584a;
+  --on-accent: #fbf9f3;
+  --danger: #b15c4c;
+}
+
+.dark {
+  --paper: #141a15;
+  --surface: #1b231c;
+  --surface-alt: #212b22;
+  --ink: #ede9dc;
+  --ink-soft: #a2ac9c;
+  --line: #2c362d;
+  --moss: #8cae8e;
+  --moss-soft: #26332a;
+  --clay: #ce9a80;
+  --clay-soft: #332621;
+  --nav-bg: #1b231c;
+  --now: #e0796a;
+  --on-accent: #12180f;
+  --danger: #d98974;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--paper);
+}
+
+@keyframes zf-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.035);
+  }
+}
+.zf-pulse {
+  animation: zf-pulse 3.4s ease-in-out infinite;
+}
+
+@keyframes zf-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.zf-now-dot {
+  animation: zf-blink 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zf-pulse,
+  .zf-now-dot {
+    animation: none;
+  }
+}
+
+.zf-tabs::-webkit-scrollbar {
+  display: none;
+}

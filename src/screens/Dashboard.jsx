@@ -5,11 +5,11 @@ import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 
 const APPTS = [
-  { id: 1, time: "09:00", name: "Марина Соколова", service: "Классический массаж", color: "#7C9A86", status: "done", price: 4200 },
-  { id: 2, time: "10:30", name: "Игорь Плетнёв", service: "Спортивный массаж", color: "#B98572", status: "done", price: 5200 },
-  { id: 3, time: "12:00", name: "Анна Ким", service: "Лимфодренаж", color: "#9C8FB0", status: "next", price: 3900 },
-  { id: 4, time: "14:00", name: "Дарья Ефимова", service: "Массаж лица", color: "#C6A15B", status: "upcoming", price: 2800 },
-  { id: 5, time: "16:30", name: "Олег Крылов", service: "Классический массаж", color: "#7C9A86", status: "upcoming", price: 4200 },
+  { id: 1, clientId: 1, time: "09:00", name: "Марина Соколова", service: "Классический массаж", color: "#7C9A86", status: "done", price: 4200 },
+  { id: 2, clientId: 2, time: "10:30", name: "Игорь Плетнёв", service: "Спортивный массаж", color: "#B98572", status: "done", price: 5200 },
+  { id: 3, clientId: 3, time: "12:00", name: "Анна Ким", service: "Лимфодренаж", color: "#9C8FB0", status: "next", price: 3900 },
+  { id: 4, clientId: 4, time: "14:00", name: "Дарья Ефимова", service: "Массаж лица", color: "#C6A15B", status: "upcoming", price: 2800 },
+  { id: 5, clientId: 5, time: "16:30", name: "Олег Крылов", service: "Классический массаж", color: "#7C9A86", status: "upcoming", price: 4200 },
 ];
 const TOTAL_SLOTS = 8;
 
@@ -67,7 +67,7 @@ export default function Dashboard() {
         </div>
 
         {next && (
-          <Link to="/clients" className="block mx-5 mt-4 rounded-3xl p-5 bg-[var(--moss)]" style={{ color: "var(--on-accent)" }}>
+          <Link to={`/clients/${next.clientId}`} className="block mx-5 mt-4 rounded-3xl p-5 bg-[var(--moss)]" style={{ color: "var(--on-accent)" }}>
             <div className="text-xs uppercase opacity-80" style={{ letterSpacing: "0.08em" }}>Следующий клиент</div>
             <div className="flex items-center justify-between mt-2">
               <div>
@@ -101,7 +101,7 @@ export default function Dashboard() {
             <div className="flex flex-col gap-4">
               {APPTS.map((a) => (
                 <Link
-                  key={a.id} to="/clients"
+                  key={a.id} to={`/clients/${a.clientId}`}
                   className="relative flex items-center gap-3 text-left rounded-2xl p-3 -ml-1"
                   style={{ background: a.status === "next" ? "var(--moss-soft)" : "transparent" }}
                 >

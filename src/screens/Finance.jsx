@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Plus, ArrowUpRight, ArrowDownRight, Wallet, Receipt } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
@@ -16,11 +17,11 @@ const WEEK = [
 ];
 
 const TRANSACTIONS = [
-  { id: 1, type: "income", title: "Марина Соколова", subtitle: "Классический массаж", amount: 4200, time: "09:00" },
-  { id: 2, type: "income", title: "Игорь Плетнёв", subtitle: "Спортивный массаж", amount: 5200, time: "10:30" },
-  { id: 3, type: "expense", title: "Расходники", subtitle: "Масло, полотенца", amount: 2000, time: "11:15" },
-  { id: 4, type: "income", title: "Анна Ким", subtitle: "Лимфодренаж", amount: 3800, time: "13:00" },
-  { id: 5, type: "expense", title: "Аренда кабинета", subtitle: "Ежемесячный платёж", amount: 3200, time: "15:00" },
+  { id: 1, type: "income", clientId: 1, title: "Марина Соколова", subtitle: "Классический массаж", amount: 4200, time: "09:00" },
+  { id: 2, type: "income", clientId: 2, title: "Игорь Плетнёв", subtitle: "Спортивный массаж", amount: 5200, time: "10:30" },
+  { id: 3, type: "expense", clientId: null, title: "Расходники", subtitle: "Масло, полотенца", amount: 2000, time: "11:15" },
+  { id: 4, type: "income", clientId: 3, title: "Анна Ким", subtitle: "Лимфодренаж", amount: 3800, time: "13:00" },
+  { id: 5, type: "expense", clientId: null, title: "Аренда кабинета", subtitle: "Ежемесячный платёж", amount: 3200, time: "15:00" },
 ];
 
 export default function Finance() {
@@ -90,20 +91,24 @@ export default function Finance() {
         <div className="mx-5 mt-6">
           <div className="text-sm font-medium mb-2.5 text-[var(--ink-soft)]">Операции сегодня</div>
           <div className="flex flex-col gap-2.5">
-            {TRANSACTIONS.map((t) => (
-              <div key={t.id} className="rounded-2xl p-3.5 flex items-center gap-3 bg-[var(--surface)] border border-[var(--line)]">
-                <div className="rounded-full p-2" style={{ background: t.type === "income" ? "var(--moss-soft)" : "var(--clay-soft)" }}>
-                  {t.type === "income" ? <ArrowUpRight size={16} className="text-[var(--moss)]" /> : <ArrowDownRight size={16} className="text-[var(--clay)]" />}
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{t.title}</div>
-                  <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{t.subtitle} · {t.time}</div>
-                </div>
-                <div className="text-sm font-mono" style={{ color: t.type === "income" ? "var(--moss)" : "var(--clay)" }}>
-                  {t.type === "income" ? "+" : "−"}{t.amount.toLocaleString("ru-RU")} ₽
-                </div>
-              </div>
-            ))}
+            {TRANSACTIONS.map((t) => {
+              const Wrapper = t.clientId ? Link : "div";
+              const wrapperProps = t.clientId ? { to: `/clients/${t.clientId}` } : {};
+              return (
+                <Wrapper key={t.id} {...wrapperProps} className="rounded-2xl p-3.5 flex items-center gap-3 bg-[var(--surface)] border border-[var(--line)]">
+                  <div className="rounded-full p-2" style={{ background: t.type === "income" ? "var(--moss-soft)" : "var(--clay-soft)" }}>
+                    {t.type === "income" ? <ArrowUpRight size={16} className="text-[var(--moss)]" /> : <ArrowDownRight size={16} className="text-[var(--clay)]" />}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{t.title}</div>
+                    <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{t.subtitle} · {t.time}</div>
+                  </div>
+                  <div className="text-sm font-mono" style={{ color: t.type === "income" ? "var(--moss)" : "var(--clay)" }}>
+                    {t.type === "income" ? "+" : "−"}{t.amount.toLocaleString("ru-RU")} ₽
+                  </div>
+                </Wrapper>
+              );
+            })}
           </div>
         </div>
 

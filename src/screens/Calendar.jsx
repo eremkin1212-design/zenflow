@@ -10,7 +10,7 @@ const DAY_START = 8 * 60;
 const DAY_END = 20 * 60;
 const HOUR_H = 64;
 const GRID_HEIGHT = ((DAY_END - DAY_START) / 60) * HOUR_H;
-const SNAP_MIN = 15;
+const SNAP_MIN = 1;
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 function toMinutes(t) { const [h, m] = t.split(":").map(Number); return h * 60 + m; }

@@ -1,0 +1,18 @@
+name: Fix schedule autosave
+on: [push]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch
+        run: |
+          python -c "from pathlib import Path; p=Path('src/screens/Settings.jsx'); s=p.read_text(); old='''  function updateSelectedDay(fields) {\n    setSchedule((prev) => ({ ...prev, dates: { ...prev.dates, [selectedKey]: { ...(prev.dates[selectedKey] || emptyDay()), ...fields } } }));\n    setHoursDirty(true);\n  }\n  function resetSelectedDay() {\n    setSchedule((prev) => { const dates = { ...prev.dates }; delete dates[selectedKey]; return { ...prev, dates }; });\n    setHoursDirty(true);\n  }\n  async function handleSaveHours() {\n    setSavingHours(true);\n    try { await updateProfile(user.id, { working_hours: schedule }); setHoursDirty(false); }\n    catch { window.alert(\\\"Не удалось сохранить рабочее время. Проверь подключение.\\\"); }\n    finally { setSavingHours(false); }\n  }\n'''; new='''  async function persistSchedule(nextSchedule) {\n    if (!user) return;\n    setSavingHours(true);\n    try { await updateProfile(user.id, { working_hours: nextSchedule }); setHoursDirty(false); }\n    catch { setHoursDirty(true); window.alert(\\\"Не удалось сохранить рабочее время. Проверь подключение.\\\"); }\n    finally { setSavingHours(false); }\n  }\n  function updateSelectedDay(fields) {\n    setSchedule((prev) => { const nextSchedule = { ...prev, dates: { ...prev.dates, [selectedKey]: { ...(prev.dates[selectedKey] || emptyDay()), ...fields } } }; void persistSchedule(nextSchedule); return nextSchedule; });\n    setHoursDirty(true);\n  }\n  function resetSelectedDay() {\n    setSchedule((prev) => { const dates = { ...prev.dates }; delete dates[selectedKey]; const nextSchedule = { ...prev, dates }; void persistSchedule(nextSchedule); return nextSchedule; });\n    setHoursDirty(true);\n  }\n  async function handleSaveHours() { await persistSchedule(schedule); }\n'''; assert old in s, 'target not found'; s=s.replace(old,new,1); old2='''    setSchedule((prev) => {\n      const dates = { ...prev.dates };\n      targets.forEach((key) => { dates[key] = cloneDay(selectedDay); });\n      return { ...prev, dates };\n    });\n    setHoursDirty(true);\n    setCopyOpen(false);\n'''; new2='''    setSchedule((prev) => {\n      const dates = { ...prev.dates };\n      targets.forEach((key) => { dates[key] = cloneDay(selectedDay); });\n      const nextSchedule = { ...prev, dates };\n      void persistSchedule(nextSchedule);\n      return nextSchedule;\n    });\n    setHoursDirty(true);\n    setCopyOpen(false);\n'''; assert old2 in s, 'copy target not found'; p.write_text(s.replace(old2,new2,1))"
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/screens/Settings.jsx
+          git diff --cached --quiet || (git commit -m 'Fix working-hours autosave' && git push)

@@ -74,6 +74,12 @@ export default function ClientsList() {
                 const tag = ratingTag(c);
                 const tagBg = tag.tone === "moss" ? "var(--moss)" : tag.tone === "clay" ? "var(--clay)" : "var(--surface-alt)";
                 const tagFg = tag.tone === "soft" ? "var(--ink-soft)" : "var(--on-accent)";
+                const visitText = Number(c.visits || 0) > 0
+                  ? `${c.visits} ${Number(c.visits) === 1 ? "посещение" : Number(c.visits) < 5 ? "посещения" : "посещений"}`
+                  : "Нет визитов";
+                const detailText = Number(c.visits || 0) > 0
+                  ? `${visitText} · ${c.last_visit || ""}`
+                  : "Нет визитов";
                 return (
                   <Link
                     key={c.id} to={`/clients/${c.id}`}
@@ -84,7 +90,7 @@ export default function ClientsList() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{c.name}</div>
-                      <div className="text-xs mt-0.5 text-[var(--ink-soft)] truncate">{c.last_visit} · {c.favorite_service}</div>
+                      <div className="text-xs mt-0.5 text-[var(--ink-soft)] truncate">{detailText}</div>
                     </div>
                     <span className="rounded-full px-2.5 py-1 text-[11px] font-medium shrink-0" style={{ background: tagBg, color: tagFg }}>
                       {tag.label}

@@ -103,13 +103,14 @@ export default function ClientsList() {
 
         <BottomNav />
 
-        <button
+        <Link
+          to="/clients/new"
           aria-label="Новый клиент"
           className="fixed rounded-full flex items-center justify-center shadow-lg"
           style={{ background: "var(--clay)", color: "#FBF9F3", width: 44, height: 44, bottom: 88, right: "calc(50% - 176px)" }}
         >
           <Plus size={20} />
-        </button>
+        </Link>
       </div>
     </div>
   );

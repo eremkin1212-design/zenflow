@@ -88,3 +88,36 @@ export async function getRecommendation(clientId) {
   if (error) throw error;
   return data?.text || "Рекомендаций пока нет — появятся после первых сессий.";
 }
+
+function initialsFromName(name) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() || "")
+    .join("");
+}
+
+const PALETTE = ["#7C9A86", "#B98572", "#9C8FB0", "#C6A15B", "#6B8CAE"];
+
+export async function createClient({ name, phone }) {
+  const payload = {
+    name: name.trim(),
+    phone: phone?.trim() || "",
+    initials: initialsFromName(name),
+    visits: 0,
+    cancellations: 0,
+    avg_check: 0,
+    last_visit: "Нет визитов",
+    favorite_service: "",
+    color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+  };
+  const { data, error } = await supabase.from("clients").insert(payload).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteClient(id) {
+  const { error } = await supabase.from("clients").delete().eq("id", id);
+  if (error) throw error;
+}

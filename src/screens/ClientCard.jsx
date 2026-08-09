@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Phone, MessageCircle, Plus, CalendarCheck, Ban, Wallet, Clock, Image as ImageIcon } from "lucide-react";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Phone, MessageCircle, Plus, CalendarCheck, Ban, Wallet, Clock, Image as ImageIcon, Trash2 } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
-import { getClientById, ratingTag, getHistory, getPayments, getNotes, addNote, getRecommendation } from "../data/clients";
+import { getClientById, ratingTag, getHistory, getPayments, getNotes, addNote, getRecommendation, deleteClient } from "../data/clients";
 
 const TABS = [
   { key: "history", label: "История" },
@@ -15,6 +15,7 @@ const TABS = [
 
 export default function ClientCard() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [tab, setTab] = useState("history");
   const [status, setStatus] = useState("loading"); // loading | ready | notfound | error
   const [client, setClient] = useState(null);
@@ -24,6 +25,7 @@ export default function ClientCard() {
   const [rec, setRec] = useState("");
   const [newNote, setNewNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +55,18 @@ export default function ClientCard() {
     }
   }
 
+  async function handleDelete() {
+    if (!window.confirm(`Удалить клиента «${client.name}»? Это действие нельзя отменить.`)) return;
+    setDeleting(true);
+    try {
+      await deleteClient(id);
+      navigate("/clients");
+    } catch {
+      setDeleting(false);
+      window.alert("Не удалось удалить. Проверь подключение и попробуй снова.");
+    }
+  }
+
   if (status === "loading") {
     return <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans flex items-center justify-center text-sm text-[var(--ink-soft)]">Загружаем карточку…</div>;
   }
@@ -78,7 +92,18 @@ export default function ClientCard() {
             <ArrowLeft size={18} />
           </Link>
           <div className="text-sm font-medium text-[var(--ink-soft)]">Карточка клиента</div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              aria-label="Удалить клиента"
+              className="rounded-full p-2.5 bg-[var(--surface-alt)] border border-[var(--line)]"
+              style={{ opacity: deleting ? 0.5 : 1 }}
+            >
+              <Trash2 size={18} className="text-[var(--danger)]" />
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
 
         <div className="flex flex-col items-center mt-3 px-5">

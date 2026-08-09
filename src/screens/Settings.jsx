@@ -1,9 +1,10 @@
-import React, { useState } from "react";
-import { ChevronRight, Plus, LogOut } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { ChevronRight, Plus, LogOut, Trash2 } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import Switch from "../components/Switch";
 import { useTheme } from "../theme";
+import { getServices, createService, deleteService } from "../data/services";
 
 const INITIAL_DAYS = [
   { key: "mon", label: "Понедельник", on: true, hours: "09:00–20:00" },
@@ -15,12 +16,7 @@ const INITIAL_DAYS = [
   { key: "sun", label: "Воскресенье", on: false, hours: "Выходной" },
 ];
 
-const SERVICES = [
-  { key: "classic", name: "Классический массаж", color: "#7C9A86", dur: 60, price: 4200 },
-  { key: "sport", name: "Спортивный массаж", color: "#B98572", dur: 90, price: 5200 },
-  { key: "lymph", name: "Лимфодренаж", color: "#9C8FB0", dur: 60, price: 3800 },
-  { key: "face", name: "Массаж лица", color: "#C6A15B", dur: 45, price: 2800 },
-];
+const COLOR_OPTIONS = ["#7C9A86", "#B98572", "#9C8FB0", "#C6A15B", "#6B8CAE"];
 
 function Row({ left, right, sub }) {
   return (
@@ -39,8 +35,47 @@ export default function Settings() {
   const [days, setDays] = useState(INITIAL_DAYS);
   const [notify, setNotify] = useState({ client: true, me: true, sound: false });
 
+  const [services, setServices] = useState([]);
+  const [servicesStatus, setServicesStatus] = useState("loading");
+  const [showAddService, setShowAddService] = useState(false);
+  const [newService, setNewService] = useState({ name: "", duration: 60, price: 0, color: COLOR_OPTIONS[0] });
+  const [savingService, setSavingService] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getServices()
+      .then((data) => { if (!cancelled) { setServices(data); setServicesStatus("ready"); } })
+      .catch(() => { if (!cancelled) setServicesStatus("error"); });
+    return () => { cancelled = true; };
+  }, []);
+
   function toggleDay(key) {
     setDays((prev) => prev.map((d) => (d.key === key ? { ...d, on: !d.on } : d)));
+  }
+
+  async function handleAddService() {
+    if (!newService.name.trim()) return;
+    setSavingService(true);
+    try {
+      const created = await createService(newService);
+      setServices((prev) => [...prev, created]);
+      setNewService({ name: "", duration: 60, price: 0, color: COLOR_OPTIONS[0] });
+      setShowAddService(false);
+    } catch {
+      window.alert("Не удалось сохранить услугу. Проверь подключение и попробуй снова.");
+    } finally {
+      setSavingService(false);
+    }
+  }
+
+  async function handleDeleteService(id, name) {
+    if (!window.confirm(`Удалить услугу «${name}»?`)) return;
+    try {
+      await deleteService(id);
+      setServices((prev) => prev.filter((s) => s.id !== id));
+    } catch {
+      window.alert("Не удалось удалить. Проверь подключение и попробуй снова.");
+    }
   }
 
   return (
@@ -73,20 +108,82 @@ export default function Settings() {
 
         <div className="mx-5 mt-6">
           <div className="text-sm font-medium mb-1 text-[var(--ink-soft)]">Услуги и стоимость</div>
-          <div className="rounded-2xl px-4 bg-[var(--surface)] border border-[var(--line)]">
-            {SERVICES.map((s, i) => (
-              <div key={s.key} style={{ borderTop: i === 0 ? "none" : "1px solid var(--line)" }}>
-                <Row
-                  left={<span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full inline-block" style={{ background: s.color }} />{s.name}</span>}
-                  sub={`${s.dur} мин`}
-                  right={<span className="flex items-center gap-1.5 text-sm font-mono">{s.price.toLocaleString("ru-RU")} ₽ <ChevronRight size={14} className="text-[var(--ink-soft)]" /></span>}
-                />
+
+          {servicesStatus === "loading" && (
+            <div className="text-sm text-center py-6 text-[var(--ink-soft)]">Загружаем услуги…</div>
+          )}
+          {servicesStatus === "error" && (
+            <div className="text-sm text-center py-6 text-[var(--clay)]">Не удалось загрузить услуги</div>
+          )}
+
+          {servicesStatus === "ready" && (
+            <>
+              <div className="rounded-2xl px-4 bg-[var(--surface)] border border-[var(--line)]">
+                {services.map((s, i) => (
+                  <div key={s.id} style={{ borderTop: i === 0 ? "none" : "1px solid var(--line)" }}>
+                    <Row
+                      left={<span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full inline-block" style={{ background: s.color }} />{s.name}</span>}
+                      sub={`${s.duration} мин`}
+                      right={
+                        <span className="flex items-center gap-2 text-sm">
+                          <span className="font-mono">{s.price.toLocaleString("ru-RU")} ₽</span>
+                          <button onClick={() => handleDeleteService(s.id, s.name)} aria-label={`Удалить ${s.name}`} className="p-1">
+                            <Trash2 size={15} className="text-[var(--danger)]" />
+                          </button>
+                        </span>
+                      }
+                    />
+                  </div>
+                ))}
+                {services.length === 0 && <div className="text-sm text-center py-4 text-[var(--ink-soft)]">Услуг пока нет</div>}
               </div>
-            ))}
-          </div>
-          <button className="mt-2.5 w-full rounded-2xl py-3 text-sm font-medium flex items-center justify-center gap-1.5 border border-dashed border-[var(--line)] text-[var(--moss)]">
-            <Plus size={15} /> Добавить услугу
-          </button>
+
+              {showAddService ? (
+                <div className="mt-2.5 rounded-2xl p-3.5 flex flex-col gap-2.5 bg-[var(--surface)] border border-[var(--line)]">
+                  <input
+                    value={newService.name}
+                    onChange={(e) => setNewService((s) => ({ ...s, name: e.target.value }))}
+                    placeholder="Название услуги"
+                    className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none"
+                  />
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <input
+                      type="number" value={newService.duration}
+                      onChange={(e) => setNewService((s) => ({ ...s, duration: Number(e.target.value) || 0 }))}
+                      placeholder="Минуты"
+                      className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none"
+                    />
+                    <input
+                      type="number" value={newService.price}
+                      onChange={(e) => setNewService((s) => ({ ...s, price: Number(e.target.value) || 0 }))}
+                      placeholder="Цена ₽"
+                      className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {COLOR_OPTIONS.map((c) => (
+                      <button
+                        key={c} onClick={() => setNewService((s) => ({ ...s, color: c }))}
+                        aria-label={`Цвет ${c}`}
+                        className="rounded-full"
+                        style={{ width: 22, height: 22, background: c, boxShadow: newService.color === c ? "0 0 0 2px var(--ink)" : "none" }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mt-1">
+                    <button onClick={() => setShowAddService(false)} className="flex-1 rounded-full py-2.5 text-sm font-medium bg-[var(--surface-alt)]">Отмена</button>
+                    <button onClick={handleAddService} disabled={savingService} className="flex-1 rounded-full py-2.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: savingService ? 0.6 : 1 }}>
+                      {savingService ? "Сохраняем…" : "Сохранить"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowAddService(true)} className="mt-2.5 w-full rounded-2xl py-3 text-sm font-medium flex items-center justify-center gap-1.5 border border-dashed border-[var(--line)] text-[var(--moss)]">
+                  <Plus size={15} /> Добавить услугу
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         <div className="mx-5 mt-6">

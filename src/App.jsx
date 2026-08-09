@@ -5,6 +5,7 @@ import Dashboard from "./screens/Dashboard";
 import Calendar from "./screens/Calendar";
 import ClientsList from "./screens/ClientsList";
 import ClientCard from "./screens/ClientCard";
+import ClientForm from "./screens/ClientForm";
 import AppointmentForm from "./screens/AppointmentForm";
 import Finance from "./screens/Finance";
 import Settings from "./screens/Settings";
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/clients" element={<ClientsList />} />
+          <Route path="/clients/new" element={<ClientForm />} />
           <Route path="/clients/:id" element={<ClientCard />} />
           <Route path="/appointment/:mode" element={<AppointmentForm />} />
           <Route path="/finance" element={<Finance />} />

@@ -1,14 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Search, Plus, Minus, Repeat, X, Check } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
-
-const SERVICES = [
-  { key: "classic", name: "Классический массаж", color: "#7C9A86", dur: 60, price: 4200 },
-  { key: "sport", name: "Спортивный массаж", color: "#B98572", dur: 90, price: 5200 },
-  { key: "lymph", name: "Лимфодренаж", color: "#9C8FB0", dur: 60, price: 3800 },
-  { key: "face", name: "Массаж лица", color: "#C6A15B", dur: 45, price: 2800 },
-];
+import { getServices } from "../data/services";
 
 const RECENT_CLIENTS = ["Марина Соколова", "Игорь Плетнёв", "Дарья Ефимова", "Олег Крылов"];
 const REPEATS = ["Не повторять", "Каждую неделю", "Каждые 2 недели", "Каждый месяц"];
@@ -27,15 +21,36 @@ export default function AppointmentForm() {
   const navigate = useNavigate();
   const initialEdit = routeMode !== "new";
 
+  const [services, setServices] = useState([]);
+  const [servicesStatus, setServicesStatus] = useState("loading");
+
   const [mode, setMode] = useState(initialEdit ? "edit" : "new");
   const [client, setClient] = useState(initialEdit ? "Анна Ким" : null);
-  const [service, setService] = useState(initialEdit ? "lymph" : null);
+  const [service, setService] = useState(null);
   const [dayIdx, setDayIdx] = useState((new Date().getDay() + 6) % 7);
   const [timeMin, setTimeMin] = useState(initialEdit ? 13 * 60 : 10 * 60);
   const [duration, setDuration] = useState(60);
   const [price, setPrice] = useState(initialEdit ? 3800 : 0);
   const [repeat, setRepeat] = useState("Не повторять");
   const [notes, setNotes] = useState(initialEdit ? "Просит поменьше давления в области поясницы." : "");
+
+  useEffect(() => {
+    let cancelled = false;
+    getServices()
+      .then((data) => {
+        if (cancelled) return;
+        setServices(data);
+        setServicesStatus("ready");
+        // в режиме редактирования выбираем услугу по умолчанию (Лимфодренаж — для демо)
+        if (initialEdit) {
+          const def = data.find((s) => s.name === "Лимфодренаж") || data[0];
+          if (def) setService(def.id);
+        }
+      })
+      .catch(() => { if (!cancelled) setServicesStatus("error"); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const monday = startOfWeek(new Date());
   const weekDates = Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
@@ -45,13 +60,15 @@ export default function AppointmentForm() {
     if (next === "new") {
       setClient(null); setService(null); setTimeMin(10 * 60); setDuration(60); setPrice(0); setNotes(""); setRepeat("Не повторять");
     } else {
-      setClient("Анна Ким"); setService("lymph"); setTimeMin(13 * 60); setDuration(60); setPrice(3800);
+      setClient("Анна Ким"); setTimeMin(13 * 60); setDuration(60); setPrice(3800);
       setNotes("Просит поменьше давления в области поясницы."); setRepeat("Не повторять");
+      const def = services.find((s) => s.name === "Лимфодренаж") || services[0];
+      if (def) setService(def.id);
     }
   }
 
   function pickService(s) {
-    setService(s.key); setDuration(s.dur); setPrice(s.price);
+    setService(s.id); setDuration(s.duration); setPrice(s.price);
   }
 
   return (
@@ -111,14 +128,20 @@ export default function AppointmentForm() {
         <div className="mx-5 mt-5">
           <div className="text-sm font-medium mb-2 text-[var(--ink-soft)]">Услуга</div>
           <div className="grid grid-cols-2 gap-2.5">
-            {SERVICES.map((s) => {
-              const active = service === s.key;
+            {servicesStatus === "loading" && (
+              <div className="col-span-2 text-sm text-center py-4 text-[var(--ink-soft)]">Загружаем услуги…</div>
+            )}
+            {servicesStatus === "error" && (
+              <div className="col-span-2 text-sm text-center py-4 text-[var(--clay)]">Не удалось загрузить услуги</div>
+            )}
+            {services.map((s) => {
+              const active = service === s.id;
               return (
-                <button key={s.key} onClick={() => pickService(s)} className="rounded-2xl p-3 text-left border"
+                <button key={s.id} onClick={() => pickService(s)} className="rounded-2xl p-3 text-left border"
                   style={{ background: active ? `${s.color}26` : "var(--surface)", borderColor: active ? s.color : "var(--line)" }}>
                   <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: s.color }} />
                   <div className="text-sm font-medium mt-1.5">{s.name}</div>
-                  <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{s.dur} мин · {s.price.toLocaleString("ru-RU")} ₽</div>
+                  <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{s.duration} мин · {s.price.toLocaleString("ru-RU")} ₽</div>
                 </button>
               );
             })}

@@ -11,11 +11,11 @@ const NAV = [
   { to: "/settings", label: "Настройки", Icon: Settings },
 ];
 
-export default function BottomNav() {
-  const nav = (
+function BottomNavContent() {
+  return (
     <div
-      className="zf-bottom-nav fixed z-[2147483647] bottom-0 left-0 right-0 max-w-sm mx-auto flex items-center justify-between px-6 py-3 border-t border-[var(--line)] shadow-[0_-6px_18px_rgba(0,0,0,0.08)]"
-      style={{ backgroundColor: "var(--nav-bg)", opacity: 1, pointerEvents: "auto" }}
+      className="zf-bottom-nav fixed z-[2147483647] bottom-0 left-0 right-0 w-full flex items-center justify-between px-6 py-3 border-t border-[var(--line)] shadow-[0_-6px_18px_rgba(0,0,0,0.08)]"
+      style={{ backgroundColor: "var(--nav-bg)", opacity: 1 }}
     >
       {NAV.map(({ to, label, Icon }) => (
         <NavLink
@@ -38,6 +38,9 @@ export default function BottomNav() {
       ))}
     </div>
   );
+}
 
-  return typeof document === "undefined" ? nav : createPortal(nav, document.body);
+export default function BottomNav() {
+  if (typeof document === "undefined") return null;
+  return createPortal(<BottomNavContent />, document.body);
 }

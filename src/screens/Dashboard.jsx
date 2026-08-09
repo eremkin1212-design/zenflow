@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Phone, MessageCircle, Clock, ChevronRight, CalendarPlus, UserPlus } from "lucide-react";
+import { Plus, Phone, MessageCircle, Clock, ChevronRight, CalendarPlus, UserPlus, Check, X } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
-import { getAppointmentsRange, fmtDate } from "../data/appointments";
+import { getAppointmentsRange, completeAppointment, fmtDate } from "../data/appointments";
 import { useAuth } from "../auth";
 import { getProfile } from "../data/profile";
 
@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [appts, setAppts] = useState([]);
   const [status, setStatus] = useState("loading");
   const [profileName, setProfileName] = useState("");
+  const [completingId, setCompletingId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,6 +31,16 @@ export default function Dashboard() {
       .catch(() => { if (!cancelled) setStatus("error"); });
     return () => { cancelled = true; };
   }, []);
+
+  async function handleComplete(a, method) {
+    try {
+      const updated = await completeAppointment(a, method);
+      setAppts((prev) => prev.map((x) => (x.id === a.id ? updated : x)));
+      setCompletingId(null);
+    } catch {
+      window.alert("Не удалось завершить. Попробуй снова.");
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -122,27 +133,57 @@ export default function Dashboard() {
           {status === "ready" && sorted.length > 0 && (
             <div className="relative pl-4">
               <div className="absolute left-[7px] top-1 bottom-1 w-px bg-[var(--line)]" />
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
                 {sorted.map((a) => (
-                  <Link
-                    key={a.id} to={`/clients/${a.clients?.id}`}
-                    className="relative flex items-center gap-3 text-left rounded-2xl p-3 -ml-1"
-                    style={{ background: a.status === "planned" && a.id === next?.id ? "var(--moss-soft)" : "transparent" }}
-                  >
-                    <span className="absolute -left-[9px] w-3 h-3 rounded-full" style={{ background: a.services?.color || "var(--line)", boxShadow: "0 0 0 3px var(--paper)" }} />
-                    <div className="w-12 text-sm shrink-0 font-mono text-[var(--ink-soft)]">{a.start_time}</div>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium">{a.clients?.name || "Клиент удалён"}</div>
-                      <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{a.services?.name}</div>
-                    </div>
+                  <div key={a.id}>
                     <div
-                      className="text-sm font-mono"
-                      style={{ color: a.status === "done" ? "var(--ink-soft)" : "var(--ink)", textDecoration: a.status === "done" ? "line-through" : "none" }}
+                      className="relative flex items-center gap-2 rounded-2xl p-3 -ml-1"
+                      style={{ background: a.status === "planned" && a.id === next?.id ? "var(--moss-soft)" : "transparent" }}
                     >
-                      {a.price.toLocaleString("ru-RU")}₽
+                      <span className="absolute -left-[9px] w-3 h-3 rounded-full" style={{ background: a.services?.color || "var(--line)", boxShadow: "0 0 0 3px var(--paper)" }} />
+                      <Link to={`/clients/${a.clients?.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-12 text-sm shrink-0 font-mono text-[var(--ink-soft)]">{a.start_time}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{a.clients?.name || "Клиент удалён"}</div>
+                          <div className="text-xs mt-0.5 text-[var(--ink-soft)] truncate">{a.services?.name}</div>
+                        </div>
+                        <div
+                          className="text-sm font-mono shrink-0"
+                          style={{ color: a.status === "done" ? "var(--ink-soft)" : "var(--ink)", textDecoration: a.status === "done" ? "line-through" : "none" }}
+                        >
+                          {a.price.toLocaleString("ru-RU")}₽
+                        </div>
+                        <ChevronRight size={16} className="text-[var(--ink-soft)] shrink-0" />
+                      </Link>
+                      {a.status === "planned" && (
+                        <button
+                          onClick={() => setCompletingId((prev) => (prev === a.id ? null : a.id))}
+                          aria-label="Завершить и принять оплату"
+                          className="rounded-full p-2 shrink-0"
+                          style={{ background: "var(--moss)", color: "var(--on-accent)" }}
+                        >
+                          <Check size={14} />
+                        </button>
+                      )}
                     </div>
-                    <ChevronRight size={16} className="text-[var(--ink-soft)]" />
-                  </Link>
+
+                    {completingId === a.id && (
+                      <div className="mt-1 ml-3 rounded-2xl p-3 bg-[var(--surface-alt)]">
+                        <div className="text-xs mb-2 text-[var(--ink-soft)]">Как оплатили?</div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => handleComplete(a, "Наличные")} className="flex-1 rounded-full py-2 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                            Наличные
+                          </button>
+                          <button onClick={() => handleComplete(a, "Карта")} className="flex-1 rounded-full py-2 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                            Карта
+                          </button>
+                          <button onClick={() => setCompletingId(null)} aria-label="Отмена" className="rounded-full p-2 bg-[var(--surface)]">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>

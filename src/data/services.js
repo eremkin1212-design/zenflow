@@ -21,6 +21,12 @@ export async function createService({ name, color, duration, price }) {
   return data;
 }
 
+export async function updateService(id, fields) {
+  const { data, error } = await supabase.from("services").update(fields).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
 export async function deleteService(id) {
   const { error } = await supabase.from("services").delete().eq("id", id);
   if (error) throw error;

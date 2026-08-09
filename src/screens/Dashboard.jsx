@@ -7,21 +7,15 @@ import { getAppointmentsRange, completeAppointment, fmtDate } from "../data/appo
 import { useAuth } from "../auth";
 import { getProfile } from "../data/profile";
 
-const KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const DEFAULT_WEEK = [
-  { key: "mon", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "tue", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "wed", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "thu", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "fri", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "sat", on: true, start: "10:00", end: "16:00", breakStart: null, breakEnd: null },
-  { key: "sun", on: false, start: "10:00", end: "16:00", breakStart: null, breakEnd: null },
-];
 function mins(t) { const [h, m] = String(t || "00:00").split(":").map(Number); return h * 60 + m; }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
-function mondayIndex(d) { return (d.getDay() + 6) % 7; }
-function normalize(value) { if (Array.isArray(value)) return { weekly: value.length ? value : DEFAULT_WEEK, dates: {} }; return { weekly: value?.weekly?.length ? value.weekly : DEFAULT_WEEK, dates: value?.dates || {} }; }
-function hoursForDate(value, date) { const s = normalize(value); const key = fmtDate(date); const base = s.weekly.find((d) => d.key === KEYS[mondayIndex(date)]) || DEFAULT_WEEK[mondayIndex(date)]; return s.dates[key] ? { ...base, ...s.dates[key] } : base; }
+function normalize(value) { if (Array.isArray(value)) return { weekly: value, dates: {} }; return { weekly: value?.weekly || [], dates: value?.dates || {} }; }
+function hoursForDate(value, date) {
+  const s = normalize(value);
+  const key = fmtDate(date);
+  // The current schedule is date-based: a date is working only when it was explicitly configured.
+  return s.dates[key] ? { ...s.dates[key] } : { on: false, start: "00:00", end: "00:00", breakStart: null, breakEnd: null };
+}
 function greeting(h) { if (h < 6) return "Доброй ночи"; if (h < 12) return "Доброе утро"; if (h < 18) return "Добрый день"; return "Добрый вечер"; }
 
 export default function Dashboard() {
@@ -35,10 +29,10 @@ export default function Dashboard() {
   useEffect(() => { if (!user) return; getProfile(user.id).then((p) => { setProfileName(p?.name || ""); setWorkingHours(p?.working_hours || null); }).catch(() => {}); }, [user]);
   useEffect(() => { let dead = false; setStatus("loading"); getAppointmentsRange(date, date).then((d) => { if (!dead) { setAppts(d); setStatus("ready"); } }).catch(() => { if (!dead) setStatus("error"); }); return () => { dead = true; }; }, [date]);
   const wh = hoursForDate(workingHours, date);
-  const workMinutes = Math.max(60, mins(wh.end) - mins(wh.start) - (wh.breakStart && wh.breakEnd ? Math.max(0, mins(wh.breakEnd) - mins(wh.breakStart)) : 0));
+  const workMinutes = wh.on ? Math.max(60, mins(wh.end) - mins(wh.start) - (wh.breakStart && wh.breakEnd ? Math.max(0, mins(wh.breakEnd) - mins(wh.breakStart)) : 0)) : 0;
   const active = useMemo(() => appts.filter((a) => a.status !== "cancelled"), [appts]);
   const occupied = active.reduce((s, a) => s + Number(a.duration || 0), 0);
-  const load = wh.on ? Math.min(100, Math.round((occupied / workMinutes) * 100)) : 0;
+  const load = wh.on && workMinutes ? Math.min(100, Math.round((occupied / workMinutes) * 100)) : 0;
   const income = active.filter((a) => a.status === "done").reduce((s, a) => s + Number(a.price || 0), 0);
   const sorted = [...active].sort((a, b) => a.start_time.localeCompare(b.start_time));
   const next = sorted.find((a) => a.status === "planned");

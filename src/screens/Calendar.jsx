@@ -60,6 +60,9 @@ export default function Calendar() {
   const [status, setStatus] = useState("loading");
   const [selectedId, setSelectedId] = useState(null);
   const [drag, setDrag] = useState(null);
+  const [swipe, setSwipe] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState(() => new Date(monday));
 
   const monday = useMemo(() => {
     const d = startOfWeek(new Date());
@@ -143,6 +146,51 @@ export default function Calendar() {
   useEffect(() => {
     setConfirmingComplete(false);
   }, [selectedId]);
+
+  function handleCalendarPointerDown(e) {
+    // Only the date strip handles week swipes. This prevents conflicts with
+    // dragging appointment blocks and normal page scrolling.
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    setSwipe({
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+    });
+  }
+
+  function handleCalendarPointerMove(e) {
+    if (!swipe || e.pointerId !== swipe.pointerId) return;
+
+    const dx = e.clientX - swipe.startX;
+    const dy = e.clientY - swipe.startY;
+
+    if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+      setSwipe((prev) => (prev ? { ...prev, moved: true } : prev));
+    }
+  }
+
+  function handleCalendarPointerUp(e) {
+    if (!swipe || e.pointerId !== swipe.pointerId) return;
+
+    const dx = e.clientX - swipe.startX;
+    const dy = e.clientY - swipe.startY;
+    const wasHorizontal = Math.abs(dx) >= 55 && Math.abs(dx) > Math.abs(dy) * 1.25;
+
+    setSwipe(null);
+
+    if (!wasHorizontal) return;
+
+    if (dx < 0) {
+      nextWeek();
+    } else {
+      previousWeek();
+    }
+  }
+
+  function handleCalendarPointerCancel() {
+    setSwipe(null);
+  }
 
   function previousWeek() {
     setWeekOffset((prev) => prev - 1);
@@ -317,6 +365,10 @@ export default function Calendar() {
     }
   }
 
+  useEffect(() => {
+    setPickerMonth(new Date(monday));
+  }, [monday]);
+
   const weekLabel = `${weekDates[0].toLocaleDateString("ru-RU", {
     day: "numeric",
     month: "short",
@@ -324,6 +376,37 @@ export default function Calendar() {
     day: "numeric",
     month: "short",
   })}`;
+
+  const pickerDays = useMemo(() => {
+    const first = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), 1);
+    const start = startOfWeek(first);
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  }, [pickerMonth]);
+
+  function choosePickerDate(date) {
+    const selectedWeek = startOfWeek(date);
+    const currentWeek = startOfWeek(new Date());
+    const diffDays = Math.round(
+      (selectedWeek - currentWeek) / (24 * 60 * 60 * 1000)
+    );
+    setWeekOffset(Math.round(diffDays / 7));
+    setDayIndex((date.getDay() + 6) % 7);
+    setView("day");
+    setSelectedId(null);
+    setPickerOpen(false);
+  }
+
+  function previousPickerMonth() {
+    setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  }
+
+  function nextPickerMonth() {
+    setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  }
 
   return (
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans transition-colors">
@@ -358,71 +441,167 @@ export default function Calendar() {
           ))}
         </div>
 
-        <div className="mx-5 mt-4 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={previousWeek}
-            aria-label="Предыдущая неделя"
-            className="rounded-full p-2 bg-[var(--surface-alt)] border border-[var(--line)]"
+        <div
+          className="mx-5 mt-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden"
+        >
+          <div className="flex items-center justify-between px-2 py-1">
+            <button
+              type="button"
+              onClick={previousWeek}
+              aria-label="Предыдущая неделя"
+              className="rounded-full p-2 bg-[var(--surface-alt)] border border-[var(--line)]"
+            >
+              <ChevronLeft size={17} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPickerOpen((prev) => !prev)}
+              className="flex-1 mx-2 rounded-xl py-2 text-sm font-medium capitalize text-center"
+              aria-expanded={pickerOpen}
+              aria-label="Открыть выбор даты"
+            >
+              {weekLabel}
+              <span className="ml-1 text-[var(--ink-soft)]">⌄</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={nextWeek}
+              aria-label="Следующая неделя"
+              className="rounded-full p-2 bg-[var(--surface-alt)] border border-[var(--line)]"
+            >
+              <ChevronRight size={17} />
+            </button>
+          </div>
+
+          <div
+            className="flex justify-between px-2 pb-2"
+            onPointerDown={handleCalendarPointerDown}
+            onPointerMove={handleCalendarPointerMove}
+            onPointerUp={handleCalendarPointerUp}
+            onPointerCancel={handleCalendarPointerCancel}
+            style={{ touchAction: "pan-y" }}
           >
-            <ChevronLeft size={17} />
-          </button>
-
-          <button
-            type="button"
-            onClick={goToToday}
-            className="text-sm font-medium capitalize px-3 py-1"
-          >
-            {weekLabel}
-          </button>
-
-          <button
-            type="button"
-            onClick={nextWeek}
-            aria-label="Следующая неделя"
-            className="rounded-full p-2 bg-[var(--surface-alt)] border border-[var(--line)]"
-          >
-            <ChevronRight size={17} />
-          </button>
-        </div>
-
-        <div className="flex justify-between mx-5 mt-2">
-          {weekDates.map((d, i) => {
-            const active = i === dayIndex;
-
-            return (
-              <button
-                key={d.toISOString()}
-                onClick={() => selectDay(i)}
-                className="flex flex-col items-center gap-1 rounded-xl py-2 w-9"
-                style={{
-                  background: active
-                    ? "var(--moss)"
-                    : "transparent",
-                  color: active
-                    ? "var(--on-accent)"
-                    : "var(--ink-soft)",
-                }}
-              >
-                <span className="text-[10px] uppercase opacity-80">
-                  {WEEKDAYS[i]}
-                </span>
-
-                <span
-                  className="text-sm font-medium"
+            {weekDates.map((d, i) => {
+              const active = i === dayIndex;
+              return (
+                <button
+                  key={d.toISOString()}
+                  type="button"
+                  onClick={() => selectDay(i)}
+                  className="flex flex-col items-center gap-1 rounded-xl py-2 w-9"
                   style={{
-                    color: active
-                      ? "inherit"
-                      : isToday(d)
-                      ? "var(--clay)"
-                      : "var(--ink)",
+                    background: active ? "var(--moss)" : "transparent",
+                    color: active ? "var(--on-accent)" : "var(--ink-soft)",
                   }}
                 >
-                  {d.getDate()}
-                </span>
+                  <span className="text-[10px] uppercase opacity-80">
+                    {WEEKDAYS[i]}
+                  </span>
+                  <span
+                    className="text-sm font-medium"
+                    style={{
+                      color: active
+                        ? "inherit"
+                        : isToday(d)
+                        ? "var(--clay)"
+                        : "var(--ink)",
+                    }}
+                  >
+                    {d.getDate()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {pickerOpen && (
+            <div className="px-3 pb-3 pt-1 border-t border-[var(--line)]">
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  type="button"
+                  onClick={previousPickerMonth}
+                  className="rounded-full p-2 bg-[var(--surface-alt)]"
+                  aria-label="Предыдущий месяц"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                <div className="text-sm font-medium capitalize">
+                  {pickerMonth.toLocaleDateString("ru-RU", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={nextPickerMonth}
+                  className="rounded-full p-2 bg-[var(--surface-alt)]"
+                  aria-label="Следующий месяц"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {WEEKDAYS.map((day) => (
+                  <div
+                    key={day}
+                    className="text-[10px] text-center py-1 text-[var(--ink-soft)]"
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1">
+                {pickerDays.map((d) => {
+                  const inMonth = d.getMonth() === pickerMonth.getMonth();
+                  const active =
+                    d.toDateString() === weekDates[dayIndex].toDateString();
+                  const todayDate = isToday(d);
+
+                  return (
+                    <button
+                      key={d.toISOString()}
+                      type="button"
+                      onClick={() => choosePickerDate(d)}
+                      className="h-9 rounded-xl text-sm font-medium"
+                      style={{
+                        color: inMonth
+                          ? active
+                            ? "var(--on-accent)"
+                            : todayDate
+                            ? "var(--clay)"
+                            : "var(--ink)"
+                          : "var(--ink-soft)",
+                        background: active
+                          ? "var(--moss)"
+                          : "transparent",
+                        opacity: inMonth ? 1 : 0.4,
+                      }}
+                    >
+                      {d.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={goToToday}
+                className="w-full mt-2 rounded-xl py-2 text-sm font-medium"
+                style={{
+                  background: "var(--moss-soft)",
+                  color: "var(--moss)",
+                }}
+              >
+                Сегодня
               </button>
-            );
-          })}
+            </div>
+          )}
         </div>
 
         {weekOffset !== 0 && (

@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, Plus, LogOut, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronRight, Plus, LogOut, Trash2, Check } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import Switch from "../components/Switch";
 import { useTheme } from "../theme";
+import { useAuth } from "../auth";
 import { getServices, createService, deleteService } from "../data/services";
+import { getProfile, updateProfile } from "../data/profile";
 
 const INITIAL_DAYS = [
   { key: "mon", label: "Понедельник", on: true, hours: "09:00–20:00" },
@@ -32,14 +35,47 @@ function Row({ left, right, sub }) {
 
 export default function Settings() {
   const { dark, setDark } = useTheme();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [days, setDays] = useState(INITIAL_DAYS);
   const [notify, setNotify] = useState({ client: true, me: true, sound: false });
+
+  const [profile, setProfile] = useState(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({ name: "", role: "", phone: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const [services, setServices] = useState([]);
   const [servicesStatus, setServicesStatus] = useState("loading");
   const [showAddService, setShowAddService] = useState(false);
   const [newService, setNewService] = useState({ name: "", duration: 60, price: 0, color: COLOR_OPTIONS[0] });
   const [savingService, setSavingService] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    getProfile(user.id).then((p) => {
+      setProfile(p);
+      setProfileDraft({ name: p?.name || "", role: p?.role || "Специалист", phone: p?.phone || "" });
+    });
+  }, [user]);
+
+  async function handleSaveProfile() {
+    setSavingProfile(true);
+    try {
+      const updated = await updateProfile(user.id, profileDraft);
+      setProfile(updated);
+      setEditingProfile(false);
+    } catch {
+      window.alert("Не удалось сохранить профиль. Проверь подключение.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    navigate("/login");
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -86,14 +122,30 @@ export default function Settings() {
           <ThemeToggle />
         </div>
 
-        <button className="mx-5 w-[calc(100%-2.5rem)] rounded-2xl p-4 flex items-center gap-3 bg-[var(--surface)] border border-[var(--line)]">
-          <div className="rounded-full flex items-center justify-center font-serif" style={{ width: 48, height: 48, background: "var(--moss-soft)", color: "var(--moss)", fontWeight: 500 }}>ЛТ</div>
-          <div className="flex-1 text-left">
-            <div className="text-sm font-medium">Лиза Терехова</div>
-            <div className="text-xs mt-0.5 text-[var(--ink-soft)]">Массажист · +7 916 000-00-00</div>
+        {editingProfile ? (
+          <div className="mx-5 rounded-2xl p-4 flex flex-col gap-2.5 bg-[var(--surface)] border border-[var(--line)]">
+            <input value={profileDraft.name} onChange={(e) => setProfileDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Имя" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
+            <input value={profileDraft.role} onChange={(e) => setProfileDraft((d) => ({ ...d, role: e.target.value }))} placeholder="Роль (например, Массажист)" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
+            <input value={profileDraft.phone} onChange={(e) => setProfileDraft((d) => ({ ...d, phone: e.target.value }))} placeholder="Телефон" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
+            <div className="flex gap-2 mt-1">
+              <button onClick={() => setEditingProfile(false)} className="flex-1 rounded-full py-2.5 text-sm font-medium bg-[var(--surface-alt)]">Отмена</button>
+              <button onClick={handleSaveProfile} disabled={savingProfile} className="flex-1 rounded-full py-2.5 text-sm font-medium flex items-center justify-center gap-1.5" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: savingProfile ? 0.6 : 1 }}>
+                <Check size={15} /> {savingProfile ? "Сохраняем…" : "Сохранить"}
+              </button>
+            </div>
           </div>
-          <ChevronRight size={16} className="text-[var(--ink-soft)]" />
-        </button>
+        ) : (
+          <button onClick={() => setEditingProfile(true)} className="mx-5 w-[calc(100%-2.5rem)] rounded-2xl p-4 flex items-center gap-3 bg-[var(--surface)] border border-[var(--line)]">
+            <div className="rounded-full flex items-center justify-center font-serif" style={{ width: 48, height: 48, background: "var(--moss-soft)", color: "var(--moss)", fontWeight: 500 }}>
+              {(profile?.name || user?.email || "??").slice(0, 2).toUpperCase()}
+            </div>
+            <div className="flex-1 text-left">
+              <div className="text-sm font-medium">{profile?.name || "Без имени"}</div>
+              <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{profile?.role || "Специалист"}{profile?.phone ? ` · ${profile.phone}` : ""}</div>
+            </div>
+            <ChevronRight size={16} className="text-[var(--ink-soft)]" />
+          </button>
+        )}
 
         <div className="mx-5 mt-6">
           <div className="text-sm font-medium mb-1 text-[var(--ink-soft)]">Рабочее время</div>
@@ -212,7 +264,7 @@ export default function Settings() {
         </div>
 
         <div className="mx-5 mt-6">
-          <button className="w-full rounded-2xl p-4 flex items-center justify-center gap-2 text-sm font-medium" style={{ background: "var(--clay-soft)", color: "var(--clay)" }}>
+          <button onClick={handleSignOut} className="w-full rounded-2xl p-4 flex items-center justify-center gap-2 text-sm font-medium" style={{ background: "var(--clay-soft)", color: "var(--clay)" }}>
             <LogOut size={16} /> Выйти из аккаунта
           </button>
         </div>

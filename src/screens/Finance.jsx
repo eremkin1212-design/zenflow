@@ -1,40 +1,96 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, ArrowUpRight, ArrowDownRight, Wallet, Receipt } from "lucide-react";
+import { Plus, ArrowUpRight, ArrowDownRight, Wallet, Receipt, X } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
+import { getAppointmentsRange, fmtDate } from "../data/appointments";
+import { getExpensesRange, createExpense } from "../data/expenses";
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]];
+const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
-const WEEK = [
-  { day: "Пн", income: 12400, expense: 2000 },
-  { day: "Вт", income: 8600, expense: 0 },
-  { day: "Ср", income: 15200, expense: 3400 },
-  { day: "Чт", income: 9800, expense: 0 },
-  { day: "Пт", income: 18400, expense: 5200 },
-  { day: "Сб", income: 21000, expense: 0 },
-  { day: "Вс", income: 6200, expense: 1200 },
-];
-
-const TRANSACTIONS = [
-  { id: 1, type: "income", clientId: 1, title: "Марина Соколова", subtitle: "Классический массаж", amount: 4200, time: "09:00" },
-  { id: 2, type: "income", clientId: 2, title: "Игорь Плетнёв", subtitle: "Спортивный массаж", amount: 5200, time: "10:30" },
-  { id: 3, type: "expense", clientId: null, title: "Расходники", subtitle: "Масло, полотенца", amount: 2000, time: "11:15" },
-  { id: 4, type: "income", clientId: 3, title: "Анна Ким", subtitle: "Лимфодренаж", amount: 3800, time: "13:00" },
-  { id: 5, type: "expense", clientId: null, title: "Аренда кабинета", subtitle: "Ежемесячный платёж", amount: 3200, time: "15:00" },
-];
+function startOfWeek(d) {
+  const day = (d.getDay() + 6) % 7;
+  const s = new Date(d); s.setDate(d.getDate() - day); s.setHours(0, 0, 0, 0);
+  return s;
+}
+function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+function endOfMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
 
 export default function Finance() {
   const [period, setPeriod] = useState("week");
+  const [appts, setAppts] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [status, setStatus] = useState("loading");
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [newExpense, setNewExpense] = useState({ title: "", subtitle: "", amount: 0 });
+  const [savingExpense, setSavingExpense] = useState(false);
 
-  const totals = useMemo(() => {
-    const income = WEEK.reduce((s, d) => s + d.income, 0);
-    const expense = WEEK.reduce((s, d) => s + d.expense, 0);
-    const checks = TRANSACTIONS.filter((t) => t.type === "income");
-    const avgCheck = Math.round(checks.reduce((s, t) => s + t.amount, 0) / checks.length);
-    return { income, expense, profit: income - expense, avgCheck };
-  }, []);
-  const maxVal = Math.max(...WEEK.map((d) => d.income));
+  const today = new Date();
+  const range = useMemo(() => {
+    if (period === "day") return { start: today, end: today };
+    if (period === "month") return { start: startOfMonth(today), end: endOfMonth(today) };
+    const s = startOfWeek(today);
+    const e = new Date(s); e.setDate(s.getDate() + 6);
+    return { start: s, end: e };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    Promise.all([getAppointmentsRange(range.start, range.end), getExpensesRange(range.start, range.end)])
+      .then(([a, e]) => { if (!cancelled) { setAppts(a); setExpenses(e); setStatus("ready"); } })
+      .catch(() => { if (!cancelled) setStatus("error"); });
+    return () => { cancelled = true; };
+  }, [range]);
+
+  const doneAppts = appts.filter((a) => a.status === "done");
+  const income = doneAppts.reduce((s, a) => s + a.price, 0);
+  const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
+  const profit = income - expenseTotal;
+  const avgCheck = doneAppts.length ? Math.round(income / doneAppts.length) : 0;
+
+  const chartDays = useMemo(() => {
+    const days = [];
+    const cursor = new Date(range.start);
+    while (cursor <= range.end && days.length < 14) {
+      const dStr = fmtDate(cursor);
+      const dayIncome = appts.filter((a) => a.status === "done" && a.date === dStr).reduce((s, a) => s + a.price, 0);
+      days.push({ label: period === "month" ? String(cursor.getDate()) : WEEKDAY_LABELS[(cursor.getDay() + 6) % 7], income: dayIncome });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appts, range]);
+  const maxVal = Math.max(...chartDays.map((d) => d.income), 1);
+
+  const transactions = useMemo(() => {
+    const fromAppts = doneAppts.map((a) => ({
+      id: `a${a.id}`, type: "income",
+      title: a.clients?.name || "Клиент удалён", subtitle: a.services?.name || "",
+      amount: a.price, time: a.start_time, clientId: a.clients?.id,
+    }));
+    const fromExpenses = expenses.map((e) => ({
+      id: `e${e.id}`, type: "expense", title: e.title, subtitle: e.subtitle, amount: e.amount, time: "",
+    }));
+    return [...fromAppts, ...fromExpenses].sort((a, b) => (b.time || "").localeCompare(a.time || ""));
+  }, [doneAppts, expenses]);
+
+  async function handleAddExpense() {
+    if (!newExpense.title.trim()) return;
+    setSavingExpense(true);
+    try {
+      await createExpense(newExpense);
+      setExpenses((prev) => [{ ...newExpense, id: Date.now(), date: fmtDate(new Date()) }, ...prev]);
+      setNewExpense({ title: "", subtitle: "", amount: 0 });
+      setShowAddExpense(false);
+    } catch {
+      window.alert("Не удалось сохранить расход. Проверь подключение.");
+    } finally {
+      setSavingExpense(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans transition-colors">
@@ -53,71 +109,91 @@ export default function Finance() {
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 mx-5 mt-4">
-          <div className="rounded-2xl p-3.5" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
-            <ArrowUpRight size={16} />
-            <div className="mt-2 text-lg font-medium font-mono">{totals.income.toLocaleString("ru-RU")} ₽</div>
-            <div className="text-[11px] mt-0.5 opacity-85">доход за неделю</div>
-          </div>
-          <div className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
-            <ArrowDownRight size={16} className="text-[var(--clay)]" />
-            <div className="mt-2 text-lg font-medium font-mono">{totals.expense.toLocaleString("ru-RU")} ₽</div>
-            <div className="text-[11px] mt-0.5 text-[var(--ink-soft)]">расход за неделю</div>
-          </div>
-          <div className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
-            <Wallet size={16} className="text-[var(--moss)]" />
-            <div className="mt-2 text-lg font-medium font-mono">{totals.profit.toLocaleString("ru-RU")} ₽</div>
-            <div className="text-[11px] mt-0.5 text-[var(--ink-soft)]">прибыль</div>
-          </div>
-          <div className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
-            <Receipt size={16} className="text-[var(--clay)]" />
-            <div className="mt-2 text-lg font-medium font-mono">{totals.avgCheck.toLocaleString("ru-RU")} ₽</div>
-            <div className="text-[11px] mt-0.5 text-[var(--ink-soft)]">средний чек</div>
-          </div>
-        </div>
+        {status === "loading" && <div className="text-sm text-center py-10 text-[var(--ink-soft)]">Считаем…</div>}
+        {status === "error" && <div className="text-sm text-center py-10 text-[var(--clay)]">Не удалось загрузить данные</div>}
 
-        <div className="mx-5 mt-5 rounded-3xl p-4 bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-sm font-medium mb-4 text-[var(--ink-soft)]">Доход по дням</div>
-          <div className="flex items-end justify-between gap-2" style={{ height: 110 }}>
-            {WEEK.map((d, i) => (
-              <div key={i} className="flex flex-col items-center gap-1.5 flex-1">
-                <div className="w-full rounded-lg" style={{ height: Math.max((d.income / maxVal) * 90, 6), background: "var(--moss)", opacity: 0.4 + (d.income / maxVal) * 0.6 }} />
-                <span className="text-[10px] text-[var(--ink-soft)]">{d.day}</span>
+        {status === "ready" && (
+          <>
+            <div className="grid grid-cols-2 gap-2.5 mx-5 mt-4">
+              <div className="rounded-2xl p-3.5" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                <ArrowUpRight size={16} />
+                <div className="mt-2 text-lg font-medium font-mono">{income.toLocaleString("ru-RU")} ₽</div>
+                <div className="text-[11px] mt-0.5 opacity-85">доход</div>
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
+                <ArrowDownRight size={16} className="text-[var(--clay)]" />
+                <div className="mt-2 text-lg font-medium font-mono">{expenseTotal.toLocaleString("ru-RU")} ₽</div>
+                <div className="text-[11px] mt-0.5 text-[var(--ink-soft)]">расход</div>
+              </div>
+              <div className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
+                <Wallet size={16} className="text-[var(--moss)]" />
+                <div className="mt-2 text-lg font-medium font-mono">{profit.toLocaleString("ru-RU")} ₽</div>
+                <div className="text-[11px] mt-0.5 text-[var(--ink-soft)]">прибыль</div>
+              </div>
+              <div className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
+                <Receipt size={16} className="text-[var(--clay)]" />
+                <div className="mt-2 text-lg font-medium font-mono">{avgCheck.toLocaleString("ru-RU")} ₽</div>
+                <div className="text-[11px] mt-0.5 text-[var(--ink-soft)]">средний чек</div>
+              </div>
+            </div>
 
-        <div className="mx-5 mt-6">
-          <div className="text-sm font-medium mb-2.5 text-[var(--ink-soft)]">Операции сегодня</div>
-          <div className="flex flex-col gap-2.5">
-            {TRANSACTIONS.map((t) => {
-              const Wrapper = t.clientId ? Link : "div";
-              const wrapperProps = t.clientId ? { to: `/clients/${t.clientId}` } : {};
-              return (
-                <Wrapper key={t.id} {...wrapperProps} className="rounded-2xl p-3.5 flex items-center gap-3 bg-[var(--surface)] border border-[var(--line)]">
-                  <div className="rounded-full p-2" style={{ background: t.type === "income" ? "var(--moss-soft)" : "var(--clay-soft)" }}>
-                    {t.type === "income" ? <ArrowUpRight size={16} className="text-[var(--moss)]" /> : <ArrowDownRight size={16} className="text-[var(--clay)]" />}
+            <div className="mx-5 mt-5 rounded-3xl p-4 bg-[var(--surface)] border border-[var(--line)]">
+              <div className="text-sm font-medium mb-4 text-[var(--ink-soft)]">Доход по дням</div>
+              <div className="flex items-end justify-between gap-1.5 overflow-x-auto" style={{ height: 110 }}>
+                {chartDays.map((d, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1.5 flex-1 min-w-[18px]">
+                    <div className="w-full rounded-lg" style={{ height: Math.max((d.income / maxVal) * 90, 4), background: "var(--moss)", opacity: 0.4 + (d.income / maxVal) * 0.6 }} />
+                    <span className="text-[10px] text-[var(--ink-soft)]">{d.label}</span>
                   </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{t.title}</div>
-                    <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{t.subtitle} · {t.time}</div>
-                  </div>
-                  <div className="text-sm font-mono" style={{ color: t.type === "income" ? "var(--moss)" : "var(--clay)" }}>
-                    {t.type === "income" ? "+" : "−"}{t.amount.toLocaleString("ru-RU")} ₽
-                  </div>
-                </Wrapper>
-              );
-            })}
-          </div>
-        </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mx-5 mt-6">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="text-sm font-medium text-[var(--ink-soft)]">Операции</div>
+                <button onClick={() => setShowAddExpense((v) => !v)} className="text-sm font-medium text-[var(--moss)] flex items-center gap-1">
+                  {showAddExpense ? <><X size={14} /> Закрыть</> : <><Plus size={14} /> Расход</>}
+                </button>
+              </div>
+
+              {showAddExpense && (
+                <div className="rounded-2xl p-3.5 flex flex-col gap-2.5 bg-[var(--surface)] border border-[var(--line)] mb-2.5">
+                  <input value={newExpense.title} onChange={(e) => setNewExpense((s) => ({ ...s, title: e.target.value }))} placeholder="Название расхода" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
+                  <input value={newExpense.subtitle} onChange={(e) => setNewExpense((s) => ({ ...s, subtitle: e.target.value }))} placeholder="Комментарий (необязательно)" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
+                  <input type="number" value={newExpense.amount} onChange={(e) => setNewExpense((s) => ({ ...s, amount: Number(e.target.value) || 0 }))} placeholder="Сумма ₽" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
+                  <button onClick={handleAddExpense} disabled={savingExpense} className="rounded-full py-2.5 text-sm font-medium" style={{ background: "var(--clay)", color: "#FBF9F3", opacity: savingExpense ? 0.6 : 1 }}>
+                    {savingExpense ? "Сохраняем…" : "Сохранить расход"}
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2.5">
+                {transactions.map((t) => {
+                  const Wrapper = t.clientId ? Link : "div";
+                  const props = t.clientId ? { to: `/clients/${t.clientId}` } : {};
+                  return (
+                    <Wrapper key={t.id} {...props} className="rounded-2xl p-3.5 flex items-center gap-3 bg-[var(--surface)] border border-[var(--line)]">
+                      <div className="rounded-full p-2" style={{ background: t.type === "income" ? "var(--moss-soft)" : "var(--clay-soft)" }}>
+                        {t.type === "income" ? <ArrowUpRight size={16} className="text-[var(--moss)]" /> : <ArrowDownRight size={16} className="text-[var(--clay)]" />}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{t.title}</div>
+                        <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{t.subtitle}{t.time ? ` · ${t.time}` : ""}</div>
+                      </div>
+                      <div className="text-sm font-mono" style={{ color: t.type === "income" ? "var(--moss)" : "var(--clay)" }}>
+                        {t.type === "income" ? "+" : "−"}{t.amount.toLocaleString("ru-RU")} ₽
+                      </div>
+                    </Wrapper>
+                  );
+                })}
+                {transactions.length === 0 && <div className="text-sm text-center py-6 text-[var(--ink-soft)]">За этот период операций нет</div>}
+              </div>
+            </div>
+          </>
+        )}
 
         <BottomNav />
-
-        <button aria-label="Добавить операцию" className="fixed rounded-full flex items-center justify-center shadow-lg"
-          style={{ background: "var(--clay)", color: "#FBF9F3", width: 44, height: 44, bottom: 88, right: "calc(50% - 176px)" }}>
-          <Plus size={20} />
-        </button>
       </div>
     </div>
   );

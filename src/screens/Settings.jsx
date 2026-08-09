@@ -90,20 +90,22 @@ export default function Settings() {
   const selectedMonthCells = useMemo(() => monthCells(calendarMonth), [calendarMonth]);
   const copyMonthCells = useMemo(() => monthCells(copyMonth), [copyMonth]);
 
+  async function persistSchedule(nextSchedule) {
+    if (!user) return;
+    setSavingHours(true);
+    try { await updateProfile(user.id, { working_hours: nextSchedule }); setHoursDirty(false); }
+    catch { setHoursDirty(true); window.alert("Не удалось сохранить рабочее время. Проверь подключение."); }
+    finally { setSavingHours(false); }
+  }
   function updateSelectedDay(fields) {
-    setSchedule((prev) => ({ ...prev, dates: { ...prev.dates, [selectedKey]: { ...(prev.dates[selectedKey] || emptyDay()), ...fields } } }));
+    setSchedule((prev) => { const nextSchedule = { ...prev, dates: { ...prev.dates, [selectedKey]: { ...(prev.dates[selectedKey] || emptyDay()), ...fields } } }; void persistSchedule(nextSchedule); return nextSchedule; });
     setHoursDirty(true);
   }
   function resetSelectedDay() {
-    setSchedule((prev) => { const dates = { ...prev.dates }; delete dates[selectedKey]; return { ...prev, dates }; });
+    setSchedule((prev) => { const dates = { ...prev.dates }; delete dates[selectedKey]; const nextSchedule = { ...prev, dates }; void persistSchedule(nextSchedule); return nextSchedule; });
     setHoursDirty(true);
   }
-  async function handleSaveHours() {
-    setSavingHours(true);
-    try { await updateProfile(user.id, { working_hours: schedule }); setHoursDirty(false); }
-    catch { window.alert("Не удалось сохранить рабочее время. Проверь подключение."); }
-    finally { setSavingHours(false); }
-  }
+  async function handleSaveHours() { await persistSchedule(schedule); }
   function openCopy() { setCopyMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)); setCopyDates({}); setCopyOpen(true); }
   function toggleCopyDate(d) {
     const key = fmtDate(d);
@@ -116,7 +118,9 @@ export default function Settings() {
     setSchedule((prev) => {
       const dates = { ...prev.dates };
       targets.forEach((key) => { dates[key] = cloneDay(selectedDay); });
-      return { ...prev, dates };
+      const nextSchedule = { ...prev, dates };
+      void persistSchedule(nextSchedule);
+      return nextSchedule;
     });
     setHoursDirty(true);
     setCopyOpen(false);

@@ -8,6 +8,8 @@ import { getAppointmentsRange, updateAppointment, fmtDate } from "../data/appoin
 const DAY_START = 8 * 60;
 const DAY_END = 20 * 60;
 const HOUR_H = 64;
+const GRID_HEIGHT = ((DAY_END - DAY_START) / 60) * HOUR_H;
+const SNAP_MIN = 15;
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 function toMinutes(t) { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
@@ -28,6 +30,7 @@ export default function Calendar() {
   const [appts, setAppts] = useState([]);
   const [status, setStatus] = useState("loading");
   const [selectedId, setSelectedId] = useState(null);
+  const [drag, setDrag] = useState(null); // { id, startY, startTop, currentTop, moved, duration, originalStart }
 
   const monday = useMemo(() => startOfWeek(new Date()), []);
   const sunday = useMemo(() => { const d = new Date(monday); d.setDate(monday.getDate() + 6); return d; }, [monday]);
@@ -69,6 +72,47 @@ export default function Calendar() {
     } catch {
       // откатываем при ошибке сети
       setAppts((prev) => prev.map((a) => (a.id === selectedId ? { ...a, start_time: selected.start_time } : a)));
+    }
+  }
+
+  function topToTime(top, duration) {
+    const raw = DAY_START + (top / HOUR_H) * 60;
+    const snapped = Math.round(raw / SNAP_MIN) * SNAP_MIN;
+    const clamped = Math.max(DAY_START, Math.min(snapped, DAY_END - duration));
+    return toTime(clamped);
+  }
+
+  function handlePointerDown(e, a) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const top = ((toMinutes(a.start_time) - DAY_START) / 60) * HOUR_H;
+    setDrag({ id: a.id, startY: e.clientY, startTop: top, currentTop: top, moved: false, duration: a.duration, originalStart: a.start_time });
+  }
+
+  function handlePointerMove(e) {
+    if (!drag) return;
+    const deltaY = e.clientY - drag.startY;
+    const height = Math.max((drag.duration / 60) * HOUR_H, 40);
+    let newTop = drag.startTop + deltaY;
+    newTop = Math.max(0, Math.min(newTop, GRID_HEIGHT - height));
+    setDrag((d) => (d ? { ...d, currentTop: newTop, moved: d.moved || Math.abs(deltaY) > 4 } : d));
+  }
+
+  async function handlePointerUp() {
+    if (!drag) return;
+    const { id, moved, duration, originalStart, currentTop } = drag;
+    if (!moved) {
+      setSelectedId((prev) => (prev === id ? null : id));
+      setDrag(null);
+      return;
+    }
+    const newTime = topToTime(currentTop, duration);
+    setDrag(null);
+    if (newTime === originalStart) return;
+    setAppts((prev) => prev.map((a) => (a.id === id ? { ...a, start_time: newTime } : a)));
+    try {
+      await updateAppointment(id, { start_time: newTime });
+    } catch {
+      setAppts((prev) => prev.map((a) => (a.id === id ? { ...a, start_time: originalStart } : a)));
     }
   }
 
@@ -141,7 +185,7 @@ export default function Calendar() {
         )}
 
         {status === "ready" && view === "day" && (
-          <div className="mx-5 mt-5 relative" style={{ height: ((DAY_END - DAY_START) / 60) * HOUR_H }}>
+          <div className="mx-5 mt-5 relative" style={{ height: GRID_HEIGHT }}>
             {Array.from({ length: (DAY_END - DAY_START) / 60 + 1 }).map((_, i) => (
               <div key={i} className="absolute left-10 right-0 flex items-start border-t border-[var(--line)]" style={{ top: i * HOUR_H }}>
                 <span className="text-[11px] -translate-x-full -ml-2 -mt-1.5 font-mono text-[var(--ink-soft)]">
@@ -158,17 +202,28 @@ export default function Calendar() {
             )}
 
             {dayAppts.map((a) => {
-              const top = ((toMinutes(a.start_time) - DAY_START) / 60) * HOUR_H;
+              const isDragging = drag?.id === a.id;
+              const top = isDragging ? drag.currentTop : ((toMinutes(a.start_time) - DAY_START) / 60) * HOUR_H;
               const height = Math.max((a.duration / 60) * HOUR_H, 40);
               const isSel = selectedId === a.id;
               const color = a.services?.color || "#999";
+              const liveTime = isDragging ? topToTime(drag.currentTop, a.duration) : a.start_time;
               return (
                 <button
-                  key={a.id} onClick={() => setSelectedId(isSel ? null : a.id)}
-                  className="absolute left-10 right-0 rounded-xl text-left px-3 py-1.5 overflow-hidden"
-                  style={{ top, height, background: `${color}26`, borderLeft: `3px solid ${color}`, boxShadow: isSel ? `0 0 0 2px ${color}` : "none" }}
+                  key={a.id}
+                  onPointerDown={(e) => handlePointerDown(e, a)}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                  className="absolute left-10 right-0 rounded-xl text-left px-3 py-1.5 overflow-hidden select-none"
+                  style={{
+                    top, height, background: `${color}26`, borderLeft: `3px solid ${color}`,
+                    boxShadow: isSel || isDragging ? `0 0 0 2px ${color}` : "none",
+                    touchAction: "none", cursor: "grab", zIndex: isDragging ? 10 : 1,
+                    transition: isDragging ? "none" : "top 0.15s ease",
+                  }}
                 >
-                  <div className="text-xs font-medium">{a.start_time} · {a.clients?.name || "Клиент удалён"}</div>
+                  <div className="text-xs font-medium">{liveTime} · {a.clients?.name || "Клиент удалён"}</div>
                   <div className="text-[11px] text-[var(--ink-soft)]">{a.services?.name}</div>
                 </button>
               );

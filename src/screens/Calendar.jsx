@@ -114,14 +114,19 @@ export default function Calendar() {
     return toTime(clamped);
   }
 
-  const LONG_PRESS_MS = 300;
+  const LONG_PRESS_MS = 550;
   const SCROLL_CANCEL_PX = 10;
 
   function handlePointerDown(e, a) {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    const target = e.currentTarget;
+    const pointerId = e.pointerId;
     const top = ((toMinutes(a.start_time) - DAY_START) / 60) * HOUR_H;
     const timerId = setTimeout(() => {
-      setDrag((d) => (d && d.id === a.id ? { ...d, armed: true } : d));
+      setDrag((d) => {
+        if (!d || d.id !== a.id) return d;
+        try { target.setPointerCapture(pointerId); } catch {}
+        return { ...d, armed: true };
+      });
     }, LONG_PRESS_MS);
     setDrag({
       id: a.id, startX: e.clientX, startY: e.clientY, startTop: top, currentTop: top,

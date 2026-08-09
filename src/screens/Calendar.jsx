@@ -10,12 +10,12 @@ import { useAuth } from "../auth";
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DEFAULT_WEEK = [
-  { key: "mon", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "tue", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "wed", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "thu", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "fri", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" },
-  { key: "sat", on: true, start: "10:00", end: "16:00", breakStart: null, breakEnd: null },
+  { key: "mon", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null },
+  { key: "tue", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null },
+  { key: "wed", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null },
+  { key: "thu", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null },
+  { key: "fri", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null },
+  { key: "sat", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null },
   { key: "sun", on: false, start: "10:00", end: "16:00", breakStart: null, breakEnd: null },
 ];
 const HOUR_H = 52;

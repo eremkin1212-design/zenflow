@@ -12,7 +12,7 @@ const NAV = [
 
 export default function BottomNav() {
   return (
-    <div className="fixed z-50 bottom-0 left-0 right-0 max-w-sm mx-auto flex items-center justify-between px-6 py-3 bg-[var(--nav-bg)] border-t border-[var(--line)] shadow-[0_-6px_18px_rgba(0,0,0,0.04)]">
+    <div className="zf-bottom-nav fixed z-[9999] bottom-0 left-0 right-0 max-w-sm mx-auto flex items-center justify-between px-6 py-3 border-t border-[var(--line)] shadow-[0_-6px_18px_rgba(0,0,0,0.08)]">
       {NAV.map(({ to, label, Icon }) => (
         <NavLink
           key={to}

@@ -1,0 +1,1 @@
+Client follow-up feature is implemented in ClientsList.jsx and clientFollowUp.js.

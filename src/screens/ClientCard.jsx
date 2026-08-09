@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Phone, MessageCircle, Plus, CalendarCheck, Ban, Wallet, Clock, Image as ImageIcon } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
-import { getClientById, ratingTag, genHistory, genPayments, getNotes, getRecommendation } from "../data/clients";
+import { getClientById, ratingTag, getHistory, getPayments, getNotes, addNote, getRecommendation } from "../data/clients";
 
 const TABS = [
   { key: "history", label: "История" },
@@ -15,13 +15,52 @@ const TABS = [
 
 export default function ClientCard() {
   const { id } = useParams();
-  const client = getClientById(id);
   const [tab, setTab] = useState("history");
+  const [status, setStatus] = useState("loading"); // loading | ready | notfound | error
+  const [client, setClient] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [rec, setRec] = useState("");
+  const [newNote, setNewNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
 
-  if (!client) {
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    Promise.all([getClientById(id), getHistory(id), getPayments(id), getNotes(id), getRecommendation(id)])
+      .then(([c, h, p, n, r]) => {
+        if (cancelled) return;
+        if (!c) { setStatus("notfound"); return; }
+        setClient(c); setHistory(h); setPayments(p); setNotes(n); setRec(r);
+        setStatus("ready");
+      })
+      .catch(() => { if (!cancelled) setStatus("error"); });
+    return () => { cancelled = true; };
+  }, [id]);
+
+  async function handleAddNote() {
+    if (!newNote.trim()) return;
+    setSavingNote(true);
+    try {
+      const saved = await addNote(id, newNote.trim());
+      setNotes((prev) => [saved, ...prev]);
+      setNewNote("");
+    } catch {
+      // тихо игнорируем — в проде здесь стоит показать тост об ошибке
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  if (status === "loading") {
+    return <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans flex items-center justify-center text-sm text-[var(--ink-soft)]">Загружаем карточку…</div>;
+  }
+
+  if (status === "notfound" || status === "error") {
     return (
       <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans flex flex-col items-center justify-center gap-3 p-6 text-center">
-        <div className="text-lg font-serif">Клиент не найден</div>
+        <div className="text-lg font-serif">{status === "notfound" ? "Клиент не найден" : "Не удалось загрузить"}</div>
         <Link to="/clients" className="text-sm font-medium text-[var(--moss)]">← Ко всем клиентам</Link>
       </div>
     );
@@ -30,10 +69,6 @@ export default function ClientCard() {
   const tag = ratingTag(client);
   const tagBg = tag.tone === "moss" ? "var(--moss)" : tag.tone === "clay" ? "var(--clay)" : "var(--surface-alt)";
   const tagFg = tag.tone === "soft" ? "var(--ink-soft)" : "var(--on-accent)";
-  const history = genHistory(client);
-  const payments = genPayments(client);
-  const notes = getNotes(client.id);
-  const rec = getRecommendation(client.id);
 
   return (
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans transition-colors">
@@ -67,8 +102,8 @@ export default function ClientCard() {
           {[
             { Icon: CalendarCheck, value: client.visits, label: "посещений" },
             { Icon: Ban, value: client.cancellations, label: "отмен" },
-            { Icon: Wallet, value: `${client.avgCheck.toLocaleString("ru-RU")} ₽`, label: "средний чек" },
-            { Icon: Clock, value: client.lastVisit, label: "последний визит" },
+            { Icon: Wallet, value: `${client.avg_check.toLocaleString("ru-RU")} ₽`, label: "средний чек" },
+            { Icon: Clock, value: client.last_visit, label: "последний визит" },
           ].map(({ Icon, value, label }, i) => (
             <div key={i} className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
               <Icon size={16} className="text-[var(--moss)]" />
@@ -130,9 +165,18 @@ export default function ClientCard() {
 
           {tab === "notes" && (
             <div className="flex flex-col gap-2.5">
-              <button className="rounded-2xl p-3.5 text-sm text-left flex items-center gap-2 border border-dashed border-[var(--line)] text-[var(--ink-soft)]">
-                <Plus size={15} /> Добавить заметку
-              </button>
+              <div className="rounded-2xl p-3.5 flex items-center gap-2 border border-[var(--line)] bg-[var(--surface)]">
+                <input
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Новая заметка…"
+                  className="flex-1 bg-transparent outline-none text-sm"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddNote()}
+                />
+                <button onClick={handleAddNote} disabled={savingNote} className="rounded-full p-2" style={{ background: "var(--moss)", color: "var(--on-accent)" }} aria-label="Сохранить заметку">
+                  <Plus size={15} />
+                </button>
+              </div>
               {notes.map((n) => (
                 <div key={n.id} className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
                   <div className="text-sm">{n.text}</div>

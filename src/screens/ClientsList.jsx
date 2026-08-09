@@ -1,25 +1,34 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search, Plus, ChevronRight } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
-import { CLIENTS, ratingTag } from "../data/clients";
+import { getClients, ratingTag } from "../data/clients";
 
 export default function ClientsList() {
   const [query, setQuery] = useState("");
+  const [clients, setClients] = useState([]);
+  const [status, setStatus] = useState("loading"); // loading | ready | error
+
+  useEffect(() => {
+    let cancelled = false;
+    getClients()
+      .then((data) => { if (!cancelled) { setClients(data); setStatus("ready"); } })
+      .catch(() => { if (!cancelled) setStatus("error"); });
+    return () => { cancelled = true; };
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return CLIENTS;
-    return CLIENTS.filter((c) => c.name.toLowerCase().includes(q));
-  }, [query]);
+    if (!q) return clients;
+    return clients.filter((c) => c.name.toLowerCase().includes(q));
+  }, [query, clients]);
 
-  // сегодняшние клиенты — наверх, остальные — по числу визитов
   const sorted = useMemo(
     () =>
       [...filtered].sort((a, b) => {
-        const aToday = a.lastVisit.startsWith("сегодня");
-        const bToday = b.lastVisit.startsWith("сегодня");
+        const aToday = a.last_visit?.startsWith("сегодня");
+        const bToday = b.last_visit?.startsWith("сегодня");
         if (aToday !== bToday) return aToday ? -1 : 1;
         return b.visits - a.visits;
       }),
@@ -44,41 +53,53 @@ export default function ClientsList() {
           />
         </div>
 
-        <div className="text-xs mt-4 mx-5 text-[var(--ink-soft)]">
-          {sorted.length} {sorted.length === 1 ? "клиент" : "клиентов"}
-        </div>
+        {status === "loading" && (
+          <div className="text-sm text-center py-10 text-[var(--ink-soft)]">Загружаем клиентов…</div>
+        )}
 
-        <div className="mx-5 mt-2 flex flex-col gap-2.5">
-          {sorted.map((c) => {
-            const tag = ratingTag(c);
-            const tagBg = tag.tone === "moss" ? "var(--moss)" : tag.tone === "clay" ? "var(--clay)" : "var(--surface-alt)";
-            const tagFg = tag.tone === "soft" ? "var(--ink-soft)" : "var(--on-accent)";
-            return (
-              <Link
-                key={c.id} to={`/clients/${c.id}`}
-                className="rounded-2xl p-3.5 flex items-center gap-3 bg-[var(--surface)] border border-[var(--line)]"
-              >
-                <div className="rounded-full flex items-center justify-center shrink-0 font-serif" style={{ width: 44, height: 44, background: "var(--moss-soft)", color: "var(--moss)", fontWeight: 500 }}>
-                  {c.initials}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{c.name}</div>
-                  <div className="text-xs mt-0.5 text-[var(--ink-soft)] truncate">{c.lastVisit} · {c.favoriteService}</div>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: tagBg, color: tagFg }}>
-                    {tag.label}
-                  </span>
-                </div>
-                <ChevronRight size={16} className="text-[var(--ink-soft)] shrink-0" />
-              </Link>
-            );
-          })}
+        {status === "error" && (
+          <div className="text-sm text-center py-10 text-[var(--clay)]">
+            Не удалось загрузить клиентов. Проверь подключение и обнови страницу.
+          </div>
+        )}
 
-          {sorted.length === 0 && (
-            <div className="text-sm text-center py-8 text-[var(--ink-soft)]">Никого не нашлось</div>
-          )}
-        </div>
+        {status === "ready" && (
+          <>
+            <div className="text-xs mt-4 mx-5 text-[var(--ink-soft)]">
+              {sorted.length} {sorted.length === 1 ? "клиент" : "клиентов"}
+            </div>
+
+            <div className="mx-5 mt-2 flex flex-col gap-2.5">
+              {sorted.map((c) => {
+                const tag = ratingTag(c);
+                const tagBg = tag.tone === "moss" ? "var(--moss)" : tag.tone === "clay" ? "var(--clay)" : "var(--surface-alt)";
+                const tagFg = tag.tone === "soft" ? "var(--ink-soft)" : "var(--on-accent)";
+                return (
+                  <Link
+                    key={c.id} to={`/clients/${c.id}`}
+                    className="rounded-2xl p-3.5 flex items-center gap-3 bg-[var(--surface)] border border-[var(--line)]"
+                  >
+                    <div className="rounded-full flex items-center justify-center shrink-0 font-serif" style={{ width: 44, height: 44, background: "var(--moss-soft)", color: "var(--moss)", fontWeight: 500 }}>
+                      {c.initials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{c.name}</div>
+                      <div className="text-xs mt-0.5 text-[var(--ink-soft)] truncate">{c.last_visit} · {c.favorite_service}</div>
+                    </div>
+                    <span className="rounded-full px-2.5 py-1 text-[11px] font-medium shrink-0" style={{ background: tagBg, color: tagFg }}>
+                      {tag.label}
+                    </span>
+                    <ChevronRight size={16} className="text-[var(--ink-soft)] shrink-0" />
+                  </Link>
+                );
+              })}
+
+              {sorted.length === 0 && (
+                <div className="text-sm text-center py-8 text-[var(--ink-soft)]">Никого не нашлось</div>
+              )}
+            </div>
+          </>
+        )}
 
         <BottomNav />
 

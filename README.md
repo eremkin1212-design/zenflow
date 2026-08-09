@@ -63,10 +63,37 @@ src/
 
 ## Данные
 
-Сейчас все данные — мок-объекты внутри экранов (клиенты, записи,
-услуги, платежи). Следующий шаг — подключить реальный backend
-(например, Supabase/Firebase или собственный API) и заменить
-константы на запросы.
+Клиенты (список, карточка, заметки) теперь берутся из реальной базы —
+см. раздел «Backend» ниже. Записи, услуги и финансы пока остаются
+мок-данными внутри экранов (`Dashboard.jsx`, `Calendar.jsx`,
+`AppointmentForm.jsx`, `Finance.jsx`, `Settings.jsx`) — следующий
+логичный шаг — перевести и их в Supabase по той же схеме, что и клиентов.
+
+## Backend
+
+Данные клиентов хранятся в **Supabase** (Postgres + автогенерируемый REST API).
+Схема таблиц — в `supabase/schema.sql`, выполняется один раз через
+Supabase → SQL Editor → Run.
+
+Локально и на Vercel нужны переменные окружения (см. `.env.example`):
+
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+Локально — файл `.env` в корне проекта (не коммитится, см. `.gitignore`).
+На Vercel — Project Settings → Environment Variables.
+
+`src/lib/supabaseClient.js` — единственное место, где создаётся клиент.
+`src/data/clients.js` — единственное место, где экраны обращаются к базе
+(getClients, getClientById, getHistory, getPayments, getNotes, addNote,
+getRecommendation). Если бэкенд когда-то сменится — переписывать нужно
+будет только этот файл, не экраны.
+
+Таблицы: `clients`, `client_history`, `client_payments`, `client_notes`,
+`client_recommendations`. Row Level Security включён с политикой
+«разрешить всё» — временно, до появления авторизации специалиста.
 
 ## Дальше по MVP
 

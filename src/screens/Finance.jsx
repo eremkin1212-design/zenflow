@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, ArrowUpRight, ArrowDownRight, Wallet, Receipt, X, Pencil, Trash2, Check } from "lucide-react";
+import { Plus, ArrowUpRight, ArrowDownRight, Wallet, Receipt, X, Pencil, Trash2, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import { getAppointmentsRange, fmtDate } from "../data/appointments";
@@ -8,6 +8,7 @@ import { getExpensesRange, createExpense, updateExpense, deleteExpense } from ".
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]];
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const MONTH_LABELS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 
 function startOfWeek(d) {
   const day = (d.getDay() + 6) % 7;
@@ -19,6 +20,7 @@ function endOfMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); 
 
 export default function Finance() {
   const [period, setPeriod] = useState("week");
+  const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
   const [appts, setAppts] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [status, setStatus] = useState("loading");
@@ -31,12 +33,12 @@ export default function Finance() {
   const today = new Date();
   const range = useMemo(() => {
     if (period === "day") return { start: today, end: today };
-    if (period === "month") return { start: startOfMonth(today), end: endOfMonth(today) };
+    if (period === "month") return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
     const s = startOfWeek(today);
     const e = new Date(s); e.setDate(s.getDate() + 6);
     return { start: s, end: e };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, [period, selectedMonth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +49,14 @@ export default function Finance() {
     return () => { cancelled = true; };
   }, [range]);
 
+  function shiftMonth(delta) {
+    setSelectedMonth((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1));
+  }
+
+  function formatMonthTitle() {
+    return `${MONTH_LABELS[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`;
+  }
+
   const doneAppts = appts.filter((a) => a.status === "done");
   const income = doneAppts.reduce((s, a) => s + a.price, 0);
   const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
@@ -56,7 +66,7 @@ export default function Finance() {
   const chartDays = useMemo(() => {
     const days = [];
     const cursor = new Date(range.start);
-    while (cursor <= range.end && days.length < 14) {
+    while (cursor <= range.end && days.length < 31) {
       const dStr = fmtDate(cursor);
       const dayIncome = appts.filter((a) => a.status === "done" && a.date === dStr).reduce((s, a) => s + a.price, 0);
       days.push({ label: period === "month" ? String(cursor.getDate()) : WEEKDAY_LABELS[(cursor.getDay() + 6) % 7], income: dayIncome });
@@ -64,7 +74,7 @@ export default function Finance() {
     }
     return days;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appts, range]);
+  }, [appts, range, period]);
   const maxVal = Math.max(...chartDays.map((d) => d.income), 1);
 
   const transactions = useMemo(() => {
@@ -138,6 +148,20 @@ export default function Finance() {
             </button>
           ))}
         </div>
+
+        {period === "month" && (
+          <div className="mx-5 mt-3 flex items-center justify-between rounded-2xl p-2 bg-[var(--surface)] border border-[var(--line)]">
+            <button onClick={() => shiftMonth(-1)} aria-label="Предыдущий месяц" className="rounded-full p-2.5 bg-[var(--surface-alt)]">
+              <ChevronLeft size={18} />
+            </button>
+            <button onClick={() => setSelectedMonth(startOfMonth(new Date()))} className="text-sm font-medium min-w-[150px] text-center">
+              {formatMonthTitle()}
+            </button>
+            <button onClick={() => shiftMonth(1)} aria-label="Следующий месяц" className="rounded-full p-2.5 bg-[var(--surface-alt)]">
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        )}
 
         {status === "loading" && <div className="text-sm text-center py-10 text-[var(--ink-soft)]">Считаем…</div>}
         {status === "error" && <div className="text-sm text-center py-10 text-[var(--clay)]">Не удалось загрузить данные</div>}

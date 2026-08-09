@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Plus, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Pencil, X, Check, Phone, MessageCircle, CalendarCheck, Ban, Wallet, Clock as ClockIcon, ChevronRight as ChevronRightIcon } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import { getAppointmentsRange, updateAppointment, fmtDate } from "../data/appointments";
+import { getClientById, ratingTag } from "../data/clients";
 
 const DAY_START = 8 * 60;
 const DAY_END = 20 * 60;
@@ -60,6 +61,37 @@ export default function Calendar() {
     .filter((a) => dayOf(a) === dayIndex && a.status !== "cancelled")
     .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
   const selected = appts.find((a) => a.id === selectedId);
+
+  const [clientDetail, setClientDetail] = useState(null);
+  useEffect(() => {
+    if (!selected?.clients?.id) { setClientDetail(null); return; }
+    let cancelled = false;
+    getClientById(selected.clients.id).then((c) => { if (!cancelled) setClientDetail(c); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [selected?.clients?.id]);
+
+  async function handleCompleteSelected() {
+    if (!selected) return;
+    try {
+      await updateAppointment(selected.id, { status: "done" });
+      setAppts((prev) => prev.map((a) => (a.id === selected.id ? { ...a, status: "done" } : a)));
+      setSelectedId(null);
+    } catch {
+      window.alert("Не удалось завершить. Попробуй снова.");
+    }
+  }
+
+  async function handleCancelSelected() {
+    if (!selected) return;
+    if (!window.confirm("Отменить эту запись?")) return;
+    try {
+      await updateAppointment(selected.id, { status: "cancelled" });
+      setAppts((prev) => prev.map((a) => (a.id === selected.id ? { ...a, status: "cancelled" } : a)));
+      setSelectedId(null);
+    } catch {
+      window.alert("Не удалось отменить. Попробуй снова.");
+    }
+  }
 
   async function moveSelected(deltaMin) {
     if (!selected) return;
@@ -236,25 +268,96 @@ export default function Calendar() {
         )}
 
         {selected && view === "day" && (
-          <div className="fixed left-0 right-0 max-w-sm mx-auto px-5" style={{ bottom: 148 }}>
-            <div className="rounded-2xl p-4 flex items-center justify-between bg-[var(--surface)] border border-[var(--line)] shadow-lg">
-              <div>
-                <div className="text-sm font-medium">{selected.clients?.name || "Клиент удалён"}</div>
-                <div className="text-xs text-[var(--ink-soft)]">Перенос записи · {selected.start_time}</div>
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setSelectedId(null)} style={{ background: "rgba(0,0,0,0.28)" }} />
+            <div className="fixed left-0 right-0 bottom-0 max-w-sm mx-auto z-30 rounded-t-3xl px-5 pt-5 pb-7 max-h-[85vh] overflow-y-auto"
+              style={{ background: "var(--surface)", boxShadow: "0 -12px 32px rgba(0,0,0,0.18)" }}>
+              <div className="flex justify-center mb-3">
+                <span className="w-9 h-1 rounded-full" style={{ background: "var(--line)" }} />
               </div>
-              <div className="flex items-center gap-2">
-                <Link to={`/appointment/${selected.id}`} aria-label="Открыть полную форму записи" className="rounded-full p-2 bg-[var(--surface-alt)]">
-                  <Pencil size={16} />
+
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full flex items-center justify-center font-serif shrink-0" style={{ width: 52, height: 52, background: "var(--moss-soft)", color: "var(--moss)", fontSize: 18, fontWeight: 500 }}>
+                    {clientDetail?.initials || selected.clients?.name?.slice(0, 2).toUpperCase() || "??"}
+                  </div>
+                  <div>
+                    <div className="text-base font-serif" style={{ fontWeight: 500 }}>{selected.clients?.name || "Клиент удалён"}</div>
+                    <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{clientDetail?.phone}</div>
+                    {clientDetail && (
+                      <span className="inline-block mt-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{
+                        background: ratingTag(clientDetail).tone === "moss" ? "var(--moss)" : ratingTag(clientDetail).tone === "clay" ? "var(--clay)" : "var(--surface-alt)",
+                        color: ratingTag(clientDetail).tone === "soft" ? "var(--ink-soft)" : "var(--on-accent)",
+                      }}>
+                        {ratingTag(clientDetail).label}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button onClick={() => setSelectedId(null)} aria-label="Закрыть" className="rounded-full p-2 bg-[var(--surface-alt)]">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 mt-4">
+                <button className="rounded-full p-3" style={{ background: "var(--moss)", color: "var(--on-accent)" }} aria-label="Позвонить"><Phone size={16} /></button>
+                <button className="rounded-full p-3 bg-[var(--surface-alt)]" aria-label="Написать"><MessageCircle size={16} /></button>
+                <Link to={`/clients/${selected.clients?.id}`} className="flex-1 rounded-full py-3 text-sm font-medium flex items-center justify-center gap-1 bg-[var(--surface-alt)]">
+                  Полная карточка <ChevronRightIcon size={14} />
                 </Link>
-                <button onClick={() => moveSelected(-30)} aria-label="На 30 минут раньше" className="rounded-full p-2 bg-[var(--surface-alt)]">
-                  <ChevronLeft size={16} />
-                </button>
-                <button onClick={() => moveSelected(30)} aria-label="На 30 минут позже" className="rounded-full p-2 bg-[var(--surface-alt)]">
-                  <ChevronRight size={16} />
-                </button>
+              </div>
+
+              {clientDetail && (
+                <div className="grid grid-cols-4 gap-2 mt-4">
+                  {[
+                    { Icon: CalendarCheck, value: clientDetail.visits, label: "визитов" },
+                    { Icon: Ban, value: clientDetail.cancellations, label: "отмен" },
+                    { Icon: Wallet, value: `${clientDetail.avg_check.toLocaleString("ru-RU")}₽`, label: "чек" },
+                    { Icon: ClockIcon, value: clientDetail.last_visit?.split(",")[0] || "—", label: "визит" },
+                  ].map(({ Icon, value, label }, i) => (
+                    <div key={i} className="rounded-xl p-2 text-center bg-[var(--surface-alt)]">
+                      <Icon size={13} className="text-[var(--moss)] mx-auto" />
+                      <div className="text-xs font-medium mt-1 font-mono truncate">{value}</div>
+                      <div className="text-[10px] text-[var(--ink-soft)]">{label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--line)" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-2 h-2 rounded-full" style={{ background: selected.services?.color || "var(--line)" }} />
+                  <span className="text-sm font-medium">{selected.services?.name}</span>
+                  <span className="text-sm font-mono ml-auto">{selected.price.toLocaleString("ru-RU")} ₽</span>
+                </div>
+
+                <div className="flex items-center justify-between rounded-2xl p-3 bg-[var(--surface-alt)]">
+                  <span className="text-xs text-[var(--ink-soft)]">Перенос записи · {selected.duration} мин</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => moveSelected(-30)} aria-label="На 30 минут раньше" className="rounded-full p-1.5 bg-[var(--surface)]">
+                      <ChevronLeft size={15} />
+                    </button>
+                    <span className="text-sm font-mono w-11 text-center">{selected.start_time}</span>
+                    <button onClick={() => moveSelected(30)} aria-label="На 30 минут позже" className="rounded-full p-1.5 bg-[var(--surface)]">
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mt-3">
+                  <button onClick={handleCancelSelected} className="rounded-full p-3 flex items-center justify-center" style={{ background: "var(--clay-soft)", color: "var(--danger)" }} aria-label="Отменить запись">
+                    <X size={16} />
+                  </button>
+                  <button onClick={handleCompleteSelected} className="rounded-full p-3 flex items-center justify-center bg-[var(--surface-alt)]" aria-label="Завершить сессию">
+                    <Check size={16} />
+                  </button>
+                  <Link to={`/appointment/${selected.id}`} className="flex-1 rounded-full py-3 text-sm font-medium flex items-center justify-center gap-1.5" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                    <Pencil size={14} /> Изменить запись
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
+          </>
         )}
 
         <BottomNav />

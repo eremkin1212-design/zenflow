@@ -4,6 +4,8 @@ import { Plus, Phone, MessageCircle, Clock, ChevronRight, CalendarPlus, UserPlus
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import { getAppointmentsRange, fmtDate } from "../data/appointments";
+import { useAuth } from "../auth";
+import { getProfile } from "../data/profile";
 
 const TOTAL_SLOTS = 8;
 
@@ -15,8 +17,10 @@ function greeting(h) {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [appts, setAppts] = useState([]);
   const [status, setStatus] = useState("loading");
+  const [profileName, setProfileName] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -26,6 +30,11 @@ export default function Dashboard() {
       .catch(() => { if (!cancelled) setStatus("error"); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    getProfile(user.id).then((p) => setProfileName(p?.name || "")).catch(() => {});
+  }, [user]);
 
   const hour = new Date().getHours();
   const dateStr = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
@@ -44,7 +53,7 @@ export default function Dashboard() {
         <div className="flex items-start justify-between px-5 pt-7 pb-4">
           <div>
             <div className="text-2xl font-serif" style={{ fontWeight: 500, letterSpacing: "-0.01em" }}>
-              {greeting(hour)}, Лиза
+              {greeting(hour)}{profileName ? `, ${profileName.split(" ")[0]}` : ""}
             </div>
             <div className="text-sm mt-1 capitalize text-[var(--ink-soft)]">{dateStr}</div>
           </div>

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./theme";
 import { AuthProvider, useAuth } from "./auth";
 import Login from "./screens/Login";
+import ResetPassword from "./screens/ResetPassword";
 import Dashboard from "./screens/Dashboard";
 import Calendar from "./screens/Calendar";
 import ClientsList from "./screens/ClientsList";
@@ -26,6 +27,7 @@ function Routed() {
   return (
     <Routes>
       <Route path="/login" element={!loading && user ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
       <Route path="/calendar" element={<RequireAuth><Calendar /></RequireAuth>} />
       <Route path="/clients" element={<RequireAuth><ClientsList /></RequireAuth>} />

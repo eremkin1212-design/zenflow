@@ -4,8 +4,6 @@
 
 import { supabase } from "../lib/supabaseClient";
 
-// Рейтинг — не оценка "хороший/плохой", а полезная информация
-// для построения отношений с клиентом.
 export function ratingTag(c) {
   if (c.last_visit?.includes("месяц") || c.last_visit?.includes("год")) {
     return { label: "Редкий клиент", tone: "clay" };
@@ -19,13 +17,28 @@ export function ratingTag(c) {
   return { label: "Обычный клиент", tone: "soft" };
 }
 
+async function getVisitCounts(clientIds) {
+  if (!clientIds?.length) return {};
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("client_id, date, status")
+    .in("client_id", clientIds)
+    .lte("date", new Date().toISOString().slice(0, 10));
+  if (error) throw error;
+  return (data || []).reduce((acc, a) => {
+    if (a.status !== "cancelled") acc[a.client_id] = (acc[a.client_id] || 0) + 1;
+    return acc;
+  }, {});
+}
+
 export async function getClients() {
   const { data, error } = await supabase
     .from("clients")
     .select("*")
     .order("id", { ascending: true });
   if (error) throw error;
-  return data;
+  const counts = await getVisitCounts((data || []).map((c) => c.id));
+  return (data || []).map((c) => ({ ...c, visits: counts[c.id] || 0 }));
 }
 
 export async function getClientById(id) {
@@ -35,7 +48,9 @@ export async function getClientById(id) {
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
-  return data;
+  if (!data) return null;
+  const counts = await getVisitCounts([data.id]);
+  return { ...data, visits: counts[data.id] || 0 };
 }
 
 export async function getHistory(clientId) {

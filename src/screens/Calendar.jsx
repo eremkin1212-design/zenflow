@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Plus, Pencil, X, Check, Phone, MessageCircle, CalendarCheck, Ban, Wallet, Clock as ClockIcon, ChevronRight as ChevronRightIcon, GripVertical } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
-import { getAppointmentsRange, updateAppointment, fmtDate } from "../data/appointments";
+import { getAppointmentsRange, updateAppointment, completeAppointment, fmtDate } from "../data/appointments";
 import { getClientById, ratingTag } from "../data/clients";
 
 const DAY_START = 8 * 60;
@@ -70,12 +70,16 @@ export default function Calendar() {
     return () => { cancelled = true; };
   }, [selected?.clients?.id]);
 
-  async function handleCompleteSelected() {
+  const [confirmingComplete, setConfirmingComplete] = useState(false);
+  useEffect(() => { setConfirmingComplete(false); }, [selectedId]);
+
+  async function handleCompleteWithMethod(method) {
     if (!selected) return;
     try {
-      await updateAppointment(selected.id, { status: "done" });
-      setAppts((prev) => prev.map((a) => (a.id === selected.id ? { ...a, status: "done" } : a)));
+      const updated = await completeAppointment(selected, method);
+      setAppts((prev) => prev.map((a) => (a.id === selected.id ? updated : a)));
       setSelectedId(null);
+      setConfirmingComplete(false);
     } catch {
       window.alert("Не удалось завершить. Попробуй снова.");
     }
@@ -361,17 +365,34 @@ export default function Calendar() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mt-3">
-                  <button onClick={handleCancelSelected} className="rounded-full p-3 flex items-center justify-center" style={{ background: "var(--clay-soft)", color: "var(--danger)" }} aria-label="Отменить запись">
-                    <X size={16} />
-                  </button>
-                  <button onClick={handleCompleteSelected} className="rounded-full p-3 flex items-center justify-center bg-[var(--surface-alt)]" aria-label="Завершить сессию">
-                    <Check size={16} />
-                  </button>
-                  <Link to={`/appointment/${selected.id}`} className="flex-1 rounded-full py-3 text-sm font-medium flex items-center justify-center gap-1.5" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
-                    <Pencil size={14} /> Изменить запись
-                  </Link>
-                </div>
+                {confirmingComplete ? (
+                  <div className="mt-3 rounded-2xl p-3 bg-[var(--surface-alt)]">
+                    <div className="text-xs mb-2 text-[var(--ink-soft)]">Как оплатили?</div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handleCompleteWithMethod("Наличные")} className="flex-1 rounded-full py-2.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                        Наличные
+                      </button>
+                      <button onClick={() => handleCompleteWithMethod("Карта")} className="flex-1 rounded-full py-2.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                        Карта
+                      </button>
+                      <button onClick={() => setConfirmingComplete(false)} aria-label="Отмена" className="rounded-full p-2.5 bg-[var(--surface)]">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-3">
+                    <button onClick={handleCancelSelected} className="rounded-full p-3 flex items-center justify-center" style={{ background: "var(--clay-soft)", color: "var(--danger)" }} aria-label="Отменить запись">
+                      <X size={16} />
+                    </button>
+                    <button onClick={() => setConfirmingComplete(true)} className="rounded-full p-3 flex items-center justify-center bg-[var(--surface-alt)]" aria-label="Завершить сессию">
+                      <Check size={16} />
+                    </button>
+                    <Link to={`/appointment/${selected.id}`} className="flex-1 rounded-full py-3 text-sm font-medium flex items-center justify-center gap-1.5" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                      <Pencil size={14} /> Изменить запись
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
           </>

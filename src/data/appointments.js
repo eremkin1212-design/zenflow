@@ -44,3 +44,18 @@ export async function updateAppointment(id, fields) {
   if (error) throw error;
   return data;
 }
+
+export async function completeAppointment(appointment, method) {
+  const updated = await updateAppointment(appointment.id, { status: "done" });
+  const clientId = appointment.client_id ?? appointment.clients?.id;
+  if (clientId) {
+    await supabase.from("client_payments").insert({
+      client_id: clientId,
+      appointment_id: appointment.id,
+      amount: appointment.price,
+      method,
+      date: fmtDate(new Date()),
+    });
+  }
+  return updated;
+}

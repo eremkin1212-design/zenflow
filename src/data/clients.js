@@ -40,12 +40,13 @@ export async function getClientById(id) {
 
 export async function getHistory(clientId) {
   const { data, error } = await supabase
-    .from("client_history")
-    .select("*")
+    .from("appointments")
+    .select("id, date, price, services(name, color)")
     .eq("client_id", clientId)
-    .order("id", { ascending: false });
+    .eq("status", "done")
+    .order("date", { ascending: false });
   if (error) throw error;
-  return data;
+  return data.map((a) => ({ id: a.id, date: a.date, price: a.price, service: a.services?.name, color: a.services?.color }));
 }
 
 export async function getPayments(clientId) {

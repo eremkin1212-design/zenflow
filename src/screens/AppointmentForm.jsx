@@ -4,7 +4,7 @@ import { ArrowLeft, Search, Plus, Minus, Repeat, X, Check } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import { getServices } from "../data/services";
 import { getClients } from "../data/clients";
-import { getAppointmentById, createAppointment, updateAppointment, fmtDate } from "../data/appointments";
+import { getAppointmentById, createAppointment, updateAppointment, completeAppointment, fmtDate } from "../data/appointments";
 
 const REPEATS = ["Не повторять", "Каждую неделю", "Каждые 2 недели", "Каждый месяц"];
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -125,10 +125,12 @@ export default function AppointmentForm() {
     }
   }
 
-  async function handleComplete() {
+  const [confirmingComplete, setConfirmingComplete] = useState(false);
+
+  async function handleCompleteWithMethod(method) {
     setSaving(true);
     try {
-      await updateAppointment(appointmentId, { status: "done" });
+      await completeAppointment({ id: appointmentId, client_id: client?.id, price }, method);
       navigate("/calendar");
     } catch {
       setError("Не удалось завершить. Попробуй снова.");
@@ -281,13 +283,30 @@ export default function AppointmentForm() {
 
         <div className="fixed bottom-0 left-0 right-0 max-w-sm mx-auto px-5 py-3 bg-[var(--paper)] border-t border-[var(--line)]">
           {!isNew ? (
-            <div className="flex items-center gap-2">
-              <button onClick={handleCancelAppointment} disabled={saving} className="rounded-full p-3.5 flex items-center justify-center" style={{ background: "var(--clay-soft)", color: "var(--danger)" }} aria-label="Отменить запись"><X size={18} /></button>
-              <button onClick={handleComplete} disabled={saving} className="rounded-full p-3.5 flex items-center justify-center bg-[var(--surface-alt)] border border-[var(--line)]" aria-label="Завершить сессию"><Check size={18} /></button>
-              <button onClick={handleSave} disabled={saving} className="flex-1 rounded-full py-3.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: saving ? 0.6 : 1 }}>
-                {saving ? "Сохраняем…" : "Сохранить изменения"}
-              </button>
-            </div>
+            confirmingComplete ? (
+              <div className="rounded-2xl p-3 bg-[var(--surface-alt)]">
+                <div className="text-xs mb-2 text-[var(--ink-soft)]">Как оплатили?</div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleCompleteWithMethod("Наличные")} disabled={saving} className="flex-1 rounded-full py-2.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                    Наличные
+                  </button>
+                  <button onClick={() => handleCompleteWithMethod("Карта")} disabled={saving} className="flex-1 rounded-full py-2.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                    Карта
+                  </button>
+                  <button onClick={() => setConfirmingComplete(false)} aria-label="Отмена" className="rounded-full p-2.5 bg-[var(--surface)]">
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button onClick={handleCancelAppointment} disabled={saving} className="rounded-full p-3.5 flex items-center justify-center" style={{ background: "var(--clay-soft)", color: "var(--danger)" }} aria-label="Отменить запись"><X size={18} /></button>
+                <button onClick={() => setConfirmingComplete(true)} disabled={saving} className="rounded-full p-3.5 flex items-center justify-center bg-[var(--surface-alt)] border border-[var(--line)]" aria-label="Завершить сессию"><Check size={18} /></button>
+                <button onClick={handleSave} disabled={saving} className="flex-1 rounded-full py-3.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: saving ? 0.6 : 1 }}>
+                  {saving ? "Сохраняем…" : "Сохранить изменения"}
+                </button>
+              </div>
+            )
           ) : (
             <button onClick={handleSave} disabled={saving} className="w-full rounded-full py-3.5 text-sm font-medium" style={{ background: "var(--clay)", color: "#FBF9F3", opacity: saving ? 0.6 : 1 }}>
               {saving ? "Сохраняем…" : "Сохранить запись"}

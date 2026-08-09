@@ -1,0 +1,39 @@
+name: Fix calendar working days
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix defaults
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/screens/Calendar.jsx')
+          s = p.read_text()
+          s = s.replace('{ key: "mon", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" }', '{ key: "mon", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null }')
+          s = s.replace('{ key: "tue", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" }', '{ key: "tue", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null }')
+          s = s.replace('{ key: "wed", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" }', '{ key: "wed", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null }')
+          s = s.replace('{ key: "thu", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" }', '{ key: "thu", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null }')
+          s = s.replace('{ key: "fri", on: true, start: "09:00", end: "20:00", breakStart: "13:00", breakEnd: "14:00" }', '{ key: "fri", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null }')
+          s = s.replace('{ key: "sat", on: true, start: "10:00", end: "16:00", breakStart: null, breakEnd: null }', '{ key: "sat", on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null }')
+          p.write_text(s)
+          p = Path('src/screens/AppointmentForm.jsx')
+          s = p.read_text()
+          marker = 'const WEEKDAYS=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];'
+          if 'function hoursForDate' not in s:
+              s = s.replace(marker, marker + '\nconst KEYS=["mon","tue","wed","thu","fri","sat","sun"];\nconst DEFAULT_WEEK=KEYS.map(key=>({key,on:false,start:"10:00",end:"22:00",breakStart:null,breakEnd:null}));\nfunction getWorkingHours(p,date){const w=p?.working_hours;if(Array.isArray(w)) return w.find(x=>x.key===KEYS[(date.getDay()+6)%7])||DEFAULT_WEEK[(date.getDay()+6)%7];const weekly=w?.weekly||DEFAULT_WEEK;return weekly.find(x=>x.key===KEYS[(date.getDay()+6)%7])||DEFAULT_WEEK[(date.getDay()+6)%7];}')
+          s = s.replace('[services,setServices]=useState([]),[clients,setClients]=useState([])', '[services,setServices]=useState([]),[clients,setClients]=useState([]),[hours,setHours]=useState(null)')
+          s = s.replace('Promise.all([getServices(),getClients(),id?', 'Promise.all([getServices(),getClients(),getProfileForForm(),id?') if False else s
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/screens/Calendar.jsx src/screens/AppointmentForm.jsx
+          git diff --cached --quiet || (git commit -m 'Treat unselected days as days off' && git push)

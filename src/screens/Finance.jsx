@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, ArrowUpRight, ArrowDownRight, Wallet, Receipt, X } from "lucide-react";
+import { Plus, ArrowUpRight, ArrowDownRight, Wallet, Receipt, X, Pencil, Trash2, Check } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import { getAppointmentsRange, fmtDate } from "../data/appointments";
-import { getExpensesRange, createExpense } from "../data/expenses";
+import { getExpensesRange, createExpense, updateExpense, deleteExpense } from "../data/expenses";
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]];
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -25,6 +25,8 @@ export default function Finance() {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [newExpense, setNewExpense] = useState({ title: "", subtitle: "", amount: 0 });
   const [savingExpense, setSavingExpense] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState(null);
+  const [editExpenseDraft, setEditExpenseDraft] = useState({ title: "", subtitle: "", amount: 0 });
 
   const today = new Date();
   const range = useMemo(() => {
@@ -72,7 +74,7 @@ export default function Finance() {
       amount: a.price, time: a.start_time, clientId: a.clients?.id,
     }));
     const fromExpenses = expenses.map((e) => ({
-      id: `e${e.id}`, type: "expense", title: e.title, subtitle: e.subtitle, amount: e.amount, time: "",
+      id: `e${e.id}`, type: "expense", expenseId: e.id, title: e.title, subtitle: e.subtitle, amount: e.amount, time: "",
     }));
     return [...fromAppts, ...fromExpenses].sort((a, b) => (b.time || "").localeCompare(a.time || ""));
   }, [doneAppts, expenses]);
@@ -81,14 +83,42 @@ export default function Finance() {
     if (!newExpense.title.trim()) return;
     setSavingExpense(true);
     try {
-      await createExpense(newExpense);
-      setExpenses((prev) => [{ ...newExpense, id: Date.now(), date: fmtDate(new Date()) }, ...prev]);
+      const created = await createExpense(newExpense);
+      setExpenses((prev) => [created, ...prev]);
       setNewExpense({ title: "", subtitle: "", amount: 0 });
       setShowAddExpense(false);
     } catch {
       window.alert("Не удалось сохранить расход. Проверь подключение.");
     } finally {
       setSavingExpense(false);
+    }
+  }
+
+  function startEditExpense(t) {
+    setEditingExpenseId(t.expenseId);
+    setEditExpenseDraft({ title: t.title, subtitle: t.subtitle, amount: t.amount });
+  }
+
+  async function handleSaveExpenseEdit() {
+    setSavingExpense(true);
+    try {
+      const updated = await updateExpense(editingExpenseId, editExpenseDraft);
+      setExpenses((prev) => prev.map((e) => (e.id === editingExpenseId ? updated : e)));
+      setEditingExpenseId(null);
+    } catch {
+      window.alert("Не удалось сохранить изменения. Проверь подключение.");
+    } finally {
+      setSavingExpense(false);
+    }
+  }
+
+  async function handleDeleteExpense(id, title) {
+    if (!window.confirm(`Удалить расход «${title}»?`)) return;
+    try {
+      await deleteExpense(id);
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
+    } catch {
+      window.alert("Не удалось удалить. Проверь подключение и попробуй снова.");
     }
   }
 
@@ -170,6 +200,21 @@ export default function Finance() {
 
               <div className="flex flex-col gap-2.5">
                 {transactions.map((t) => {
+                  if (t.type === "expense" && editingExpenseId === t.expenseId) {
+                    return (
+                      <div key={t.id} className="rounded-2xl p-3.5 flex flex-col gap-2 bg-[var(--surface)] border border-[var(--line)]">
+                        <input value={editExpenseDraft.title} onChange={(e) => setEditExpenseDraft((d) => ({ ...d, title: e.target.value }))} className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
+                        <input value={editExpenseDraft.subtitle} onChange={(e) => setEditExpenseDraft((d) => ({ ...d, subtitle: e.target.value }))} placeholder="Комментарий" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
+                        <input type="number" value={editExpenseDraft.amount} onChange={(e) => setEditExpenseDraft((d) => ({ ...d, amount: Number(e.target.value) || 0 }))} className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
+                        <div className="flex gap-2">
+                          <button onClick={() => setEditingExpenseId(null)} className="flex-1 rounded-full py-2 text-sm font-medium bg-[var(--surface-alt)]">Отмена</button>
+                          <button onClick={handleSaveExpenseEdit} disabled={savingExpense} className="flex-1 rounded-full py-2 text-sm font-medium flex items-center justify-center gap-1" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+                            <Check size={14} /> {savingExpense ? "Сохраняем…" : "Сохранить"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
                   const Wrapper = t.clientId ? Link : "div";
                   const props = t.clientId ? { to: `/clients/${t.clientId}` } : {};
                   return (
@@ -184,6 +229,12 @@ export default function Finance() {
                       <div className="text-sm font-mono" style={{ color: t.type === "income" ? "var(--moss)" : "var(--clay)" }}>
                         {t.type === "income" ? "+" : "−"}{t.amount.toLocaleString("ru-RU")} ₽
                       </div>
+                      {t.type === "expense" && (
+                        <div className="flex items-center gap-1 ml-1">
+                          <button onClick={() => startEditExpense(t)} aria-label={`Изменить ${t.title}`} className="p-1"><Pencil size={14} className="text-[var(--moss)]" /></button>
+                          <button onClick={() => handleDeleteExpense(t.expenseId, t.title)} aria-label={`Удалить ${t.title}`} className="p-1"><Trash2 size={14} className="text-[var(--danger)]" /></button>
+                        </div>
+                      )}
                     </Wrapper>
                   );
                 })}

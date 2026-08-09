@@ -22,6 +22,12 @@ export async function createExpense({ title, subtitle, amount, date }) {
   return data;
 }
 
+export async function updateExpense(id, fields) {
+  const { data, error } = await supabase.from("expenses").update(fields).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
 export async function deleteExpense(id) {
   const { error } = await supabase.from("expenses").delete().eq("id", id);
   if (error) throw error;

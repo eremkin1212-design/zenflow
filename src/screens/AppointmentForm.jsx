@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Search, Plus, Minus, Repeat, X, Check } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import { getServices } from "../data/services";
-import { getClients } from "../data/clients";
+import { getClients, createClient } from "../data/clients";
 import { getAppointmentById, createAppointment, updateAppointment, completeAppointment, fmtDate } from "../data/appointments";
 
 const REPEATS = ["Не повторять", "Каждую неделю", "Каждые 2 недели", "Каждый месяц"];
@@ -38,6 +38,10 @@ export default function AppointmentForm() {
   const [repeat, setRepeat] = useState("Не повторять");
   const [notes, setNotes] = useState("");
   const [clientQuery, setClientQuery] = useState("");
+  const [showQuickAddClient, setShowQuickAddClient] = useState(false);
+  const [quickClientName, setQuickClientName] = useState("");
+  const [quickClientPhone, setQuickClientPhone] = useState("");
+  const [savingQuickClient, setSavingQuickClient] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -78,6 +82,23 @@ export default function AppointmentForm() {
   }, [appointmentId]);
 
   const filteredClients = clients.filter((c) => c.name.toLowerCase().includes(clientQuery.toLowerCase()));
+
+  async function handleQuickAddClient() {
+    if (!quickClientName.trim()) return;
+    setSavingQuickClient(true);
+    try {
+      const created = await createClient({ name: quickClientName, phone: quickClientPhone });
+      setClients((prev) => [...prev, created]);
+      setClient({ id: created.id, name: created.name });
+      setShowQuickAddClient(false);
+      setQuickClientName("");
+      setQuickClientPhone("");
+    } catch {
+      window.alert("Не удалось сохранить клиента. Проверь подключение.");
+    } finally {
+      setSavingQuickClient(false);
+    }
+  }
 
   function pickService(s) {
     setService(s.id); setDuration(s.duration); setPrice(s.price);
@@ -185,7 +206,29 @@ export default function AppointmentForm() {
                     {c.name}
                   </button>
                 ))}
+                <button onClick={() => setShowQuickAddClient(true)} className="shrink-0 rounded-full px-3.5 py-2 text-sm flex items-center gap-1 border border-dashed border-[var(--line)]" style={{ color: "var(--moss)" }}>
+                  <Plus size={14} /> Новый
+                </button>
               </div>
+
+              {showQuickAddClient && (
+                <div className="mt-2.5 rounded-2xl p-3.5 flex flex-col gap-2.5 bg-[var(--surface)] border border-[var(--line)]">
+                  <input
+                    value={quickClientName} onChange={(e) => setQuickClientName(e.target.value)}
+                    placeholder="Имя клиента" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none"
+                  />
+                  <input
+                    value={quickClientPhone} onChange={(e) => setQuickClientPhone(e.target.value)}
+                    placeholder="Телефон (необязательно)" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowQuickAddClient(false)} className="flex-1 rounded-full py-2.5 text-sm font-medium bg-[var(--surface-alt)]">Отмена</button>
+                    <button onClick={handleQuickAddClient} disabled={savingQuickClient} className="flex-1 rounded-full py-2.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: savingQuickClient ? 0.6 : 1 }}>
+                      {savingQuickClient ? "Сохраняем…" : "Сохранить"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

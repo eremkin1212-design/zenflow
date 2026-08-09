@@ -46,7 +46,7 @@ export default function ClientForm() {
             />
           </div>
           <div>
-            <div className="text-sm font-medium mb-2 text-[var(--ink-soft)]">Телефон</div>
+            <div className="text-sm font-medium mb-2 text-[var(--ink-soft)]">Телефон <span style={{ opacity: 0.6 }}>(необязательно)</span></div>
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}

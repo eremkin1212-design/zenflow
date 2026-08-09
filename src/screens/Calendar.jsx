@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Plus, Pencil, X, Check, Phone, MessageCircle, CalendarCheck, Ban, Wallet, Clock as ClockIcon, ChevronRight as ChevronRightIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Pencil, X, Check, Phone, MessageCircle, CalendarCheck, Ban, Wallet, Clock as ClockIcon, ChevronRight as ChevronRightIcon, GripVertical } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import { getAppointmentsRange, updateAppointment, fmtDate } from "../data/appointments";
@@ -114,50 +114,26 @@ export default function Calendar() {
     return toTime(clamped);
   }
 
-  const LONG_PRESS_MS = 550;
-  const SCROLL_CANCEL_PX = 10;
-
   function handlePointerDown(e, a) {
-    const target = e.currentTarget;
-    const pointerId = e.pointerId;
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
     const top = ((toMinutes(a.start_time) - DAY_START) / 60) * HOUR_H;
-    const timerId = setTimeout(() => {
-      setDrag((d) => {
-        if (!d || d.id !== a.id) return d;
-        try { target.setPointerCapture(pointerId); } catch {}
-        return { ...d, armed: true };
-      });
-    }, LONG_PRESS_MS);
-    setDrag({
-      id: a.id, startX: e.clientX, startY: e.clientY, startTop: top, currentTop: top,
-      moved: false, armed: false, duration: a.duration, originalStart: a.start_time, timerId,
-    });
+    setDrag({ id: a.id, startY: e.clientY, startTop: top, currentTop: top, moved: false, duration: a.duration, originalStart: a.start_time });
   }
 
   function handlePointerMove(e) {
     if (!drag) return;
-    const deltaX = e.clientX - drag.startX;
-    const deltaY = e.clientY - drag.startY;
-
-    if (!drag.armed) {
-      // Пока не удержали достаточно — если палец уже заметно двигается, это скролл: отменяем перенос.
-      if (Math.hypot(deltaX, deltaY) > SCROLL_CANCEL_PX) {
-        clearTimeout(drag.timerId);
-        setDrag(null);
-      }
-      return;
-    }
-
     e.preventDefault();
+    const deltaY = e.clientY - drag.startY;
     const height = Math.max((drag.duration / 60) * HOUR_H, 40);
     let newTop = drag.startTop + deltaY;
     newTop = Math.max(0, Math.min(newTop, GRID_HEIGHT - height));
     setDrag((d) => (d ? { ...d, currentTop: newTop, moved: d.moved || Math.abs(deltaY) > 4 } : d));
   }
 
-  async function handlePointerUp() {
+  async function handlePointerUp(e) {
+    e?.stopPropagation();
     if (!drag) return;
-    clearTimeout(drag.timerId);
     const { id, moved, duration, originalStart, currentTop } = drag;
     if (!moved) {
       setSelectedId((prev) => (prev === id ? null : id));
@@ -262,31 +238,40 @@ export default function Calendar() {
 
             {dayAppts.map((a) => {
               const isDragging = drag?.id === a.id;
-              const isArmed = isDragging && drag.armed;
               const top = isDragging ? drag.currentTop : ((toMinutes(a.start_time) - DAY_START) / 60) * HOUR_H;
               const height = Math.max((a.duration / 60) * HOUR_H, 40);
               const isSel = selectedId === a.id;
               const color = a.services?.color || "#999";
               const liveTime = isDragging ? topToTime(drag.currentTop, a.duration) : a.start_time;
               return (
-                <button
+                <div
                   key={a.id}
-                  onPointerDown={(e) => handlePointerDown(e, a)}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  onPointerCancel={handlePointerUp}
+                  role="button" tabIndex={0}
+                  onClick={() => setSelectedId((prev) => (prev === a.id ? null : a.id))}
                   className="absolute left-10 right-0 rounded-xl text-left px-3 py-1.5 overflow-hidden select-none"
                   style={{
                     top, height, background: `${color}26`, borderLeft: `3px solid ${color}`,
-                    boxShadow: isSel || isArmed ? `0 0 0 2px ${color}` : "none",
-                    touchAction: "pan-y", cursor: "grab", zIndex: isDragging ? 10 : 1,
-                    transform: isArmed ? "scale(1.02)" : "scale(1)",
-                    transition: isDragging && drag.moved ? "none" : "top 0.15s ease, transform 0.15s ease",
+                    boxShadow: isSel || isDragging ? `0 0 0 2px ${color}` : "none",
+                    zIndex: isDragging ? 10 : 1,
+                    transition: isDragging ? "none" : "top 0.15s ease",
                   }}
                 >
-                  <div className="text-xs font-medium">{liveTime} · {a.clients?.name || "Клиент удалён"}</div>
-                  <div className="text-[11px] text-[var(--ink-soft)]">{a.services?.name}</div>
-                </button>
+                  <div className="text-xs font-medium pr-6">{liveTime} · {a.clients?.name || "Клиент удалён"}</div>
+                  <div className="text-[11px] text-[var(--ink-soft)] pr-6">{a.services?.name}</div>
+
+                  <div
+                    onPointerDown={(e) => handlePointerDown(e, a)}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Перенести запись"
+                    className="absolute right-0.5 top-1/2 flex items-center justify-center"
+                    style={{ width: 30, height: 30, marginTop: -15, touchAction: "none", cursor: "grab" }}
+                  >
+                    <GripVertical size={16} className="text-[var(--ink-soft)]" />
+                  </div>
+                </div>
               );
             })}
 
@@ -354,14 +339,17 @@ export default function Calendar() {
               )}
 
               <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--line)" }}>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-1">
                   <span className="w-2 h-2 rounded-full" style={{ background: selected.services?.color || "var(--line)" }} />
                   <span className="text-sm font-medium">{selected.services?.name}</span>
                   <span className="text-sm font-mono ml-auto">{selected.price.toLocaleString("ru-RU")} ₽</span>
                 </div>
+                <div className="text-xs text-[var(--ink-soft)] mb-3 pl-4">
+                  {selected.start_time}–{toTime(toMinutes(selected.start_time) + selected.duration)} · {selected.duration} мин
+                </div>
 
                 <div className="flex items-center justify-between rounded-2xl p-3 bg-[var(--surface-alt)]">
-                  <span className="text-xs text-[var(--ink-soft)]">Перенос записи · {selected.duration} мин</span>
+                  <span className="text-xs text-[var(--ink-soft)]">Перенос записи</span>
                   <div className="flex items-center gap-2">
                     <button onClick={() => moveSelected(-30)} aria-label="На 30 минут раньше" className="rounded-full p-1.5 bg-[var(--surface)]">
                       <ChevronLeft size={15} />

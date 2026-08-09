@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Pencil } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
+import { getAppointmentsRange, updateAppointment, fmtDate } from "../data/appointments";
 
 const DAY_START = 8 * 60;
 const DAY_END = 20 * 60;
@@ -21,41 +22,54 @@ function startOfWeek(d) {
   return s;
 }
 
-const BASE_APPTS = [
-  { id: 1, day: 0, start: "09:00", dur: 60, name: "Марина Соколова", service: "Классический массаж", color: "#7C9A86" },
-  { id: 2, day: 0, start: "10:30", dur: 90, name: "Игорь Плетнёв", service: "Спортивный массаж", color: "#B98572" },
-  { id: 3, day: 0, start: "13:00", dur: 60, name: "Анна Ким", service: "Лимфодренаж", color: "#9C8FB0" },
-  { id: 4, day: 1, start: "11:00", dur: 45, name: "Дарья Ефимова", service: "Массаж лица", color: "#C6A15B" },
-  { id: 5, day: 1, start: "15:30", dur: 60, name: "Олег Крылов", service: "Классический массаж", color: "#7C9A86" },
-  { id: 6, day: 2, start: "10:00", dur: 60, name: "Света Волкова", service: "Лимфодренаж", color: "#9C8FB0" },
-  { id: 7, day: 4, start: "09:30", dur: 90, name: "Павел Гриб", service: "Спортивный массаж", color: "#B98572" },
-];
-
 export default function Calendar() {
   const [view, setView] = useState("day");
   const [dayIndex, setDayIndex] = useState((new Date().getDay() + 6) % 7);
-  const [appts, setAppts] = useState(BASE_APPTS);
+  const [appts, setAppts] = useState([]);
+  const [status, setStatus] = useState("loading");
   const [selectedId, setSelectedId] = useState(null);
 
   const monday = useMemo(() => startOfWeek(new Date()), []);
+  const sunday = useMemo(() => { const d = new Date(monday); d.setDate(monday.getDate() + 6); return d; }, [monday]);
   const weekDates = useMemo(
     () => Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; }),
     [monday]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    getAppointmentsRange(monday, sunday)
+      .then((data) => { if (!cancelled) { setAppts(data); setStatus("ready"); } })
+      .catch(() => { if (!cancelled) setStatus("error"); });
+    return () => { cancelled = true; };
+  }, [monday, sunday]);
+
   const today = new Date();
   const isToday = (d) => d.toDateString() === today.toDateString();
   const nowMinutes = today.getHours() * 60 + today.getMinutes();
 
-  const dayAppts = appts.filter((a) => a.day === dayIndex).sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+  function dayOf(appt) {
+    return weekDates.findIndex((d) => fmtDate(d) === appt.date);
+  }
+
+  const dayAppts = appts
+    .filter((a) => dayOf(a) === dayIndex && a.status !== "cancelled")
+    .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
   const selected = appts.find((a) => a.id === selectedId);
 
-  function moveSelected(deltaMin) {
-    setAppts((prev) => prev.map((a) => {
-      if (a.id !== selectedId) return a;
-      let next = toMinutes(a.start) + deltaMin;
-      next = Math.max(DAY_START, Math.min(next, DAY_END - a.dur));
-      return { ...a, start: toTime(next) };
-    }));
+  async function moveSelected(deltaMin) {
+    if (!selected) return;
+    let next = toMinutes(selected.start_time) + deltaMin;
+    next = Math.max(DAY_START, Math.min(next, DAY_END - selected.duration));
+    const newTime = toTime(next);
+    setAppts((prev) => prev.map((a) => (a.id === selectedId ? { ...a, start_time: newTime } : a)));
+    try {
+      await updateAppointment(selectedId, { start_time: newTime });
+    } catch {
+      // откатываем при ошибке сети
+      setAppts((prev) => prev.map((a) => (a.id === selectedId ? { ...a, start_time: selected.start_time } : a)));
+    }
   }
 
   return (
@@ -94,10 +108,13 @@ export default function Calendar() {
           })}
         </div>
 
-        {view === "week" ? (
+        {status === "loading" && <div className="text-sm text-center py-10 text-[var(--ink-soft)]">Загружаем записи…</div>}
+        {status === "error" && <div className="text-sm text-center py-10 text-[var(--clay)]">Не удалось загрузить записи</div>}
+
+        {status === "ready" && view === "week" && (
           <div className="mx-5 mt-5 flex flex-col gap-3">
             {weekDates.map((d, i) => {
-              const list = appts.filter((a) => a.day === i).sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+              const list = appts.filter((a) => dayOf(a) === i && a.status !== "cancelled").sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
               if (list.length === 0) return null;
               return (
                 <div key={i} className="rounded-2xl p-4 bg-[var(--surface)] border border-[var(--line)]">
@@ -107,18 +124,23 @@ export default function Calendar() {
                   <div className="flex flex-col gap-2">
                     {list.map((a) => (
                       <button key={a.id} onClick={() => { setDayIndex(i); setView("day"); setSelectedId(a.id); }} className="flex items-center gap-2 text-left">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: a.color }} />
-                        <span className="text-xs w-11 shrink-0 font-mono text-[var(--ink-soft)]">{a.start}</span>
-                        <span className="text-sm truncate">{a.name}</span>
-                        <span className="text-xs ml-auto shrink-0 text-[var(--ink-soft)]">{a.service}</span>
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: a.services?.color || "var(--line)" }} />
+                        <span className="text-xs w-11 shrink-0 font-mono text-[var(--ink-soft)]">{a.start_time}</span>
+                        <span className="text-sm truncate">{a.clients?.name || "Клиент удалён"}</span>
+                        <span className="text-xs ml-auto shrink-0 text-[var(--ink-soft)]">{a.services?.name}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               );
             })}
+            {appts.filter((a) => a.status !== "cancelled").length === 0 && (
+              <div className="text-sm text-center py-6 text-[var(--ink-soft)]">На этой неделе записей нет</div>
+            )}
           </div>
-        ) : (
+        )}
+
+        {status === "ready" && view === "day" && (
           <div className="mx-5 mt-5 relative" style={{ height: ((DAY_END - DAY_START) / 60) * HOUR_H }}>
             {Array.from({ length: (DAY_END - DAY_START) / 60 + 1 }).map((_, i) => (
               <div key={i} className="absolute left-10 right-0 flex items-start border-t border-[var(--line)]" style={{ top: i * HOUR_H }}>
@@ -136,20 +158,25 @@ export default function Calendar() {
             )}
 
             {dayAppts.map((a) => {
-              const top = ((toMinutes(a.start) - DAY_START) / 60) * HOUR_H;
-              const height = Math.max((a.dur / 60) * HOUR_H, 40);
+              const top = ((toMinutes(a.start_time) - DAY_START) / 60) * HOUR_H;
+              const height = Math.max((a.duration / 60) * HOUR_H, 40);
               const isSel = selectedId === a.id;
+              const color = a.services?.color || "#999";
               return (
                 <button
                   key={a.id} onClick={() => setSelectedId(isSel ? null : a.id)}
                   className="absolute left-10 right-0 rounded-xl text-left px-3 py-1.5 overflow-hidden"
-                  style={{ top, height, background: `${a.color}26`, borderLeft: `3px solid ${a.color}`, boxShadow: isSel ? `0 0 0 2px ${a.color}` : "none" }}
+                  style={{ top, height, background: `${color}26`, borderLeft: `3px solid ${color}`, boxShadow: isSel ? `0 0 0 2px ${color}` : "none" }}
                 >
-                  <div className="text-xs font-medium">{a.start} · {a.name}</div>
-                  <div className="text-[11px] text-[var(--ink-soft)]">{a.service}</div>
+                  <div className="text-xs font-medium">{a.start_time} · {a.clients?.name || "Клиент удалён"}</div>
+                  <div className="text-[11px] text-[var(--ink-soft)]">{a.services?.name}</div>
                 </button>
               );
             })}
+
+            {dayAppts.length === 0 && (
+              <div className="text-sm text-center py-6 text-[var(--ink-soft)]">На этот день записей нет</div>
+            )}
           </div>
         )}
 
@@ -157,10 +184,13 @@ export default function Calendar() {
           <div className="fixed left-0 right-0 max-w-sm mx-auto px-5" style={{ bottom: 148 }}>
             <div className="rounded-2xl p-4 flex items-center justify-between bg-[var(--surface)] border border-[var(--line)] shadow-lg">
               <div>
-                <div className="text-sm font-medium">{selected.name}</div>
-                <div className="text-xs text-[var(--ink-soft)]">Перенос записи · {selected.start}</div>
+                <div className="text-sm font-medium">{selected.clients?.name || "Клиент удалён"}</div>
+                <div className="text-xs text-[var(--ink-soft)]">Перенос записи · {selected.start_time}</div>
               </div>
               <div className="flex items-center gap-2">
+                <Link to={`/appointment/${selected.id}`} aria-label="Открыть полную форму записи" className="rounded-full p-2 bg-[var(--surface-alt)]">
+                  <Pencil size={16} />
+                </Link>
                 <button onClick={() => moveSelected(-30)} aria-label="На 30 минут раньше" className="rounded-full p-2 bg-[var(--surface-alt)]">
                   <ChevronLeft size={16} />
                 </button>

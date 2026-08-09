@@ -117,7 +117,7 @@ export default function ClientCard() {
           <div className="flex items-center gap-3 mt-4">
             <button className="rounded-full p-3" style={{ background: "var(--moss)", color: "var(--on-accent)" }} aria-label="Позвонить"><Phone size={17} /></button>
             <button className="rounded-full p-3 bg-[var(--surface-alt)] border border-[var(--line)]" aria-label="Написать"><MessageCircle size={17} /></button>
-            <Link to="/appointment/new" className="rounded-full px-4 py-3 text-sm font-medium flex items-center gap-1.5" style={{ background: "var(--clay)", color: "#FBF9F3" }}>
+            <Link to={`/appointment/new?client=${client.id}`} className="rounded-full px-4 py-3 text-sm font-medium flex items-center gap-1.5" style={{ background: "var(--clay)", color: "#FBF9F3" }}>
               <Plus size={15} /> Записать
             </Link>
           </div>

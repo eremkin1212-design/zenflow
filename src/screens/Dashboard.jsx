@@ -1,16 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Phone, MessageCircle, Clock, ChevronRight, CalendarPlus, UserPlus } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
+import { getAppointmentsRange, fmtDate } from "../data/appointments";
 
-const APPTS = [
-  { id: 1, clientId: 1, time: "09:00", name: "Марина Соколова", service: "Классический массаж", color: "#7C9A86", status: "done", price: 4200 },
-  { id: 2, clientId: 2, time: "10:30", name: "Игорь Плетнёв", service: "Спортивный массаж", color: "#B98572", status: "done", price: 5200 },
-  { id: 3, clientId: 3, time: "12:00", name: "Анна Ким", service: "Лимфодренаж", color: "#9C8FB0", status: "next", price: 3900 },
-  { id: 4, clientId: 4, time: "14:00", name: "Дарья Ефимова", service: "Массаж лица", color: "#C6A15B", status: "upcoming", price: 2800 },
-  { id: 5, clientId: 5, time: "16:30", name: "Олег Крылов", service: "Классический массаж", color: "#7C9A86", status: "upcoming", price: 4200 },
-];
 const TOTAL_SLOTS = 8;
 
 function greeting(h) {
@@ -21,12 +15,28 @@ function greeting(h) {
 }
 
 export default function Dashboard() {
+  const [appts, setAppts] = useState([]);
+  const [status, setStatus] = useState("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    const today = new Date();
+    getAppointmentsRange(today, today)
+      .then((data) => { if (!cancelled) { setAppts(data); setStatus("ready"); } })
+      .catch(() => { if (!cancelled) setStatus("error"); });
+    return () => { cancelled = true; };
+  }, []);
+
   const hour = new Date().getHours();
   const dateStr = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
-  const income = useMemo(() => APPTS.filter((a) => a.status === "done").reduce((s, a) => s + a.price, 0), []);
-  const booked = APPTS.length;
-  const freeSlots = TOTAL_SLOTS - booked;
-  const next = APPTS.find((a) => a.status === "next") || APPTS.find((a) => a.status === "upcoming");
+  const income = useMemo(() => appts.filter((a) => a.status === "done").reduce((s, a) => s + a.price, 0), [appts]);
+  const booked = appts.filter((a) => a.status !== "cancelled").length;
+  const freeSlots = Math.max(TOTAL_SLOTS - booked, 0);
+  const sorted = useMemo(
+    () => [...appts].filter((a) => a.status !== "cancelled").sort((a, b) => a.start_time.localeCompare(b.start_time)),
+    [appts]
+  );
+  const next = sorted.find((a) => a.status === "planned");
 
   return (
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans transition-colors">
@@ -41,13 +51,12 @@ export default function Dashboard() {
           <ThemeToggle />
         </div>
 
-        {/* signature: breath of the day */}
         <div className="mx-5 rounded-3xl px-5 py-6 flex items-center gap-5 bg-[var(--surface)] border border-[var(--line)]">
           <svg width="92" height="92" viewBox="0 0 92 92" className="shrink-0">
             {Array.from({ length: TOTAL_SLOTS }).map((_, i) => {
-              const r = 10 + i * 5.2;
               const filled = i < booked;
               const isNextRing = i === booked - 1;
+              const r = 10 + i * 5.2;
               return (
                 <circle
                   key={i} cx={46} cy={46} r={r} fill="none"
@@ -67,14 +76,14 @@ export default function Dashboard() {
         </div>
 
         {next && (
-          <Link to={`/clients/${next.clientId}`} className="block mx-5 mt-4 rounded-3xl p-5 bg-[var(--moss)]" style={{ color: "var(--on-accent)" }}>
+          <Link to={`/clients/${next.clients?.id}`} className="block mx-5 mt-4 rounded-3xl p-5 bg-[var(--moss)]" style={{ color: "var(--on-accent)" }}>
             <div className="text-xs uppercase opacity-80" style={{ letterSpacing: "0.08em" }}>Следующий клиент</div>
             <div className="flex items-center justify-between mt-2">
               <div>
-                <div className="text-lg font-serif" style={{ fontWeight: 500 }}>{next.name}</div>
-                <div className="text-sm opacity-85 mt-0.5">{next.service}</div>
+                <div className="text-lg font-serif" style={{ fontWeight: 500 }}>{next.clients?.name || "Клиент удалён"}</div>
+                <div className="text-sm opacity-85 mt-0.5">{next.services?.name}</div>
                 <div className="flex items-center gap-1.5 text-sm mt-2 opacity-90">
-                  <Clock size={14} /> {next.time}
+                  <Clock size={14} /> {next.start_time}
                 </div>
               </div>
               <div className="flex flex-col gap-2">
@@ -89,39 +98,46 @@ export default function Dashboard() {
           <Link to="/appointment/new" className="rounded-2xl py-3.5 flex items-center justify-center gap-2 text-sm font-medium bg-[var(--surface)] border border-[var(--line)]">
             <CalendarPlus size={16} className="text-[var(--moss)]" /> Новая запись
           </Link>
-          <Link to="/clients" className="rounded-2xl py-3.5 flex items-center justify-center gap-2 text-sm font-medium bg-[var(--surface)] border border-[var(--line)]">
+          <Link to="/clients/new" className="rounded-2xl py-3.5 flex items-center justify-center gap-2 text-sm font-medium bg-[var(--surface)] border border-[var(--line)]">
             <UserPlus size={16} className="text-[var(--clay)]" /> Новый клиент
           </Link>
         </div>
 
         <div className="mx-5 mt-6">
           <div className="text-sm font-medium mb-3 text-[var(--ink-soft)]">Сегодня</div>
-          <div className="relative pl-4">
-            <div className="absolute left-[7px] top-1 bottom-1 w-px bg-[var(--line)]" />
-            <div className="flex flex-col gap-4">
-              {APPTS.map((a) => (
-                <Link
-                  key={a.id} to={`/clients/${a.clientId}`}
-                  className="relative flex items-center gap-3 text-left rounded-2xl p-3 -ml-1"
-                  style={{ background: a.status === "next" ? "var(--moss-soft)" : "transparent" }}
-                >
-                  <span className="absolute -left-[9px] w-3 h-3 rounded-full" style={{ background: a.color, boxShadow: "0 0 0 3px var(--paper)" }} />
-                  <div className="w-12 text-sm shrink-0 font-mono text-[var(--ink-soft)]">{a.time}</div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{a.name}</div>
-                    <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{a.service}</div>
-                  </div>
-                  <div
-                    className="text-sm font-mono"
-                    style={{ color: a.status === "done" ? "var(--ink-soft)" : "var(--ink)", textDecoration: a.status === "done" ? "line-through" : "none" }}
+
+          {status === "loading" && <div className="text-sm text-center py-6 text-[var(--ink-soft)]">Загружаем записи…</div>}
+          {status === "error" && <div className="text-sm text-center py-6 text-[var(--clay)]">Не удалось загрузить записи</div>}
+          {status === "ready" && sorted.length === 0 && <div className="text-sm text-center py-6 text-[var(--ink-soft)]">На сегодня записей нет</div>}
+
+          {status === "ready" && sorted.length > 0 && (
+            <div className="relative pl-4">
+              <div className="absolute left-[7px] top-1 bottom-1 w-px bg-[var(--line)]" />
+              <div className="flex flex-col gap-4">
+                {sorted.map((a) => (
+                  <Link
+                    key={a.id} to={`/clients/${a.clients?.id}`}
+                    className="relative flex items-center gap-3 text-left rounded-2xl p-3 -ml-1"
+                    style={{ background: a.status === "planned" && a.id === next?.id ? "var(--moss-soft)" : "transparent" }}
                   >
-                    {a.price.toLocaleString("ru-RU")}₽
-                  </div>
-                  <ChevronRight size={16} className="text-[var(--ink-soft)]" />
-                </Link>
-              ))}
+                    <span className="absolute -left-[9px] w-3 h-3 rounded-full" style={{ background: a.services?.color || "var(--line)", boxShadow: "0 0 0 3px var(--paper)" }} />
+                    <div className="w-12 text-sm shrink-0 font-mono text-[var(--ink-soft)]">{a.start_time}</div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{a.clients?.name || "Клиент удалён"}</div>
+                      <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{a.services?.name}</div>
+                    </div>
+                    <div
+                      className="text-sm font-mono"
+                      style={{ color: a.status === "done" ? "var(--ink-soft)" : "var(--ink)", textDecoration: a.status === "done" ? "line-through" : "none" }}
+                    >
+                      {a.price.toLocaleString("ru-RU")}₽
+                    </div>
+                    <ChevronRight size={16} className="text-[var(--ink-soft)]" />
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <BottomNav />

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Search, Plus, Minus, Repeat, X, Check } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import { getServices } from "../data/services";
+import { getClients } from "../data/clients";
+import { getAppointmentById, createAppointment, updateAppointment, fmtDate } from "../data/appointments";
 
-const RECENT_CLIENTS = ["Марина Соколова", "Игорь Плетнёв", "Дарья Ефимова", "Олег Крылов"];
 const REPEATS = ["Не повторять", "Каждую неделю", "Каждые 2 недели", "Каждый месяц"];
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -17,58 +18,129 @@ function pad(n) { return n.toString().padStart(2, "0"); }
 function minutesToTime(m) { return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; }
 
 export default function AppointmentForm() {
-  const { mode: routeMode } = useParams();
+  const { mode: routeParam } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const initialEdit = routeMode !== "new";
+  const isNew = routeParam === "new";
+  const appointmentId = isNew ? null : routeParam;
+  const preselectClientId = searchParams.get("client");
 
   const [services, setServices] = useState([]);
-  const [servicesStatus, setServicesStatus] = useState("loading");
+  const [clients, setClients] = useState([]);
+  const [loadStatus, setLoadStatus] = useState("loading"); // loading | ready | error
 
-  const [mode, setMode] = useState(initialEdit ? "edit" : "new");
-  const [client, setClient] = useState(initialEdit ? "Анна Ким" : null);
-  const [service, setService] = useState(null);
+  const [client, setClient] = useState(null); // { id, name }
+  const [service, setService] = useState(null); // id
   const [dayIdx, setDayIdx] = useState((new Date().getDay() + 6) % 7);
-  const [timeMin, setTimeMin] = useState(initialEdit ? 13 * 60 : 10 * 60);
+  const [timeMin, setTimeMin] = useState(10 * 60);
   const [duration, setDuration] = useState(60);
-  const [price, setPrice] = useState(initialEdit ? 3800 : 0);
+  const [price, setPrice] = useState(0);
   const [repeat, setRepeat] = useState("Не повторять");
-  const [notes, setNotes] = useState(initialEdit ? "Просит поменьше давления в области поясницы." : "");
-
-  useEffect(() => {
-    let cancelled = false;
-    getServices()
-      .then((data) => {
-        if (cancelled) return;
-        setServices(data);
-        setServicesStatus("ready");
-        // в режиме редактирования выбираем услугу по умолчанию (Лимфодренаж — для демо)
-        if (initialEdit) {
-          const def = data.find((s) => s.name === "Лимфодренаж") || data[0];
-          if (def) setService(def.id);
-        }
-      })
-      .catch(() => { if (!cancelled) setServicesStatus("error"); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [notes, setNotes] = useState("");
+  const [clientQuery, setClientQuery] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const monday = startOfWeek(new Date());
   const weekDates = Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
 
-  function switchMode(next) {
-    setMode(next);
-    if (next === "new") {
-      setClient(null); setService(null); setTimeMin(10 * 60); setDuration(60); setPrice(0); setNotes(""); setRepeat("Не повторять");
-    } else {
-      setClient("Анна Ким"); setTimeMin(13 * 60); setDuration(60); setPrice(3800);
-      setNotes("Просит поменьше давления в области поясницы."); setRepeat("Не повторять");
-      const def = services.find((s) => s.name === "Лимфодренаж") || services[0];
-      if (def) setService(def.id);
-    }
-  }
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      getServices(),
+      getClients(),
+      appointmentId ? getAppointmentById(appointmentId) : Promise.resolve(null),
+    ])
+      .then(([svcs, cls, appt]) => {
+        if (cancelled) return;
+        setServices(svcs);
+        setClients(cls);
+
+        if (appt) {
+          setClient(appt.clients ? { id: appt.clients.id, name: appt.clients.name } : null);
+          setService(appt.service_id);
+          const idx = weekDates.findIndex((d) => fmtDate(d) === appt.date);
+          setDayIdx(idx >= 0 ? idx : (new Date().getDay() + 6) % 7);
+          const [h, m] = appt.start_time.split(":").map(Number);
+          setTimeMin(h * 60 + m);
+          setDuration(appt.duration);
+          setPrice(appt.price);
+          setNotes(appt.notes || "");
+        } else if (preselectClientId) {
+          const found = cls.find((c) => String(c.id) === preselectClientId);
+          if (found) setClient({ id: found.id, name: found.name });
+        }
+        setLoadStatus("ready");
+      })
+      .catch(() => { if (!cancelled) setLoadStatus("error"); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointmentId]);
+
+  const filteredClients = clients.filter((c) => c.name.toLowerCase().includes(clientQuery.toLowerCase()));
 
   function pickService(s) {
     setService(s.id); setDuration(s.duration); setPrice(s.price);
+  }
+
+  function buildPayload() {
+    return {
+      client_id: client?.id || null,
+      service_id: service,
+      date: fmtDate(weekDates[dayIdx]),
+      start_time: minutesToTime(timeMin),
+      duration,
+      price,
+      notes,
+    };
+  }
+
+  async function handleSave() {
+    if (!client) { setError("Выберите клиента"); return; }
+    if (!service) { setError("Выберите услугу"); return; }
+    setSaving(true);
+    setError("");
+    try {
+      if (isNew) {
+        await createAppointment({ ...buildPayload(), status: "planned" });
+      } else {
+        await updateAppointment(appointmentId, buildPayload());
+      }
+      navigate("/calendar");
+    } catch {
+      setError("Не удалось сохранить. Проверь подключение и попробуй снова.");
+      setSaving(false);
+    }
+  }
+
+  async function handleCancelAppointment() {
+    if (!window.confirm("Отменить эту запись?")) return;
+    setSaving(true);
+    try {
+      await updateAppointment(appointmentId, { status: "cancelled" });
+      navigate("/calendar");
+    } catch {
+      setError("Не удалось отменить. Попробуй снова.");
+      setSaving(false);
+    }
+  }
+
+  async function handleComplete() {
+    setSaving(true);
+    try {
+      await updateAppointment(appointmentId, { status: "done" });
+      navigate("/calendar");
+    } catch {
+      setError("Не удалось завершить. Попробуй снова.");
+      setSaving(false);
+    }
+  }
+
+  if (loadStatus === "loading") {
+    return <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans flex items-center justify-center text-sm text-[var(--ink-soft)]">Загружаем…</div>;
+  }
+  if (loadStatus === "error") {
+    return <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans flex items-center justify-center text-sm text-[var(--clay)]">Не удалось загрузить данные</div>;
   }
 
   return (
@@ -79,18 +151,9 @@ export default function AppointmentForm() {
             <ArrowLeft size={18} />
           </button>
           <div className="text-lg font-serif" style={{ fontWeight: 500 }}>
-            {mode === "edit" ? "Редактирование записи" : "Новая запись"}
+            {isNew ? "Новая запись" : "Редактирование записи"}
           </div>
           <ThemeToggle />
-        </div>
-
-        <div className="mx-5 mt-3 flex rounded-full p-1 bg-[var(--surface-alt)] border border-[var(--line)]">
-          {[["new", "Новая"], ["edit", "Редактирование"]].map(([key, label]) => (
-            <button key={key} onClick={() => switchMode(key)} className="flex-1 rounded-full py-2 text-sm font-medium"
-              style={{ background: mode === key ? "var(--moss)" : "transparent", color: mode === key ? "var(--on-accent)" : "var(--ink-soft)" }}>
-              {label}
-            </button>
-          ))}
         </div>
 
         <div className="mx-5 mt-5">
@@ -99,9 +162,9 @@ export default function AppointmentForm() {
             <div className="rounded-2xl p-3.5 flex items-center justify-between bg-[var(--moss-soft)]">
               <div className="flex items-center gap-3">
                 <div className="rounded-full flex items-center justify-center text-sm font-medium" style={{ width: 38, height: 38, background: "var(--surface)", color: "var(--moss)" }}>
-                  {client.split(" ").map((w) => w[0]).join("")}
+                  {client.name.split(" ").map((w) => w[0]).join("")}
                 </div>
-                <div className="text-sm font-medium">{client}</div>
+                <div className="text-sm font-medium">{client.name}</div>
               </div>
               <button onClick={() => setClient(null)} className="text-xs font-medium text-[var(--moss)]">Изменить</button>
             </div>
@@ -109,17 +172,17 @@ export default function AppointmentForm() {
             <div>
               <div className="flex items-center gap-2 rounded-2xl px-3.5 py-2.5 bg-[var(--surface)] border border-[var(--line)]">
                 <Search size={16} className="text-[var(--ink-soft)]" />
-                <input className="flex-1 bg-transparent outline-none text-sm" placeholder="Поиск клиента" />
+                <input
+                  value={clientQuery} onChange={(e) => setClientQuery(e.target.value)}
+                  placeholder="Поиск клиента" className="flex-1 bg-transparent outline-none text-sm"
+                />
               </div>
               <div className="flex gap-2 mt-2.5 overflow-x-auto">
-                {RECENT_CLIENTS.map((name) => (
-                  <button key={name} onClick={() => setClient(name)} className="shrink-0 rounded-full px-3.5 py-2 text-sm bg-[var(--surface-alt)] border border-[var(--line)]">
-                    {name}
+                {filteredClients.slice(0, 6).map((c) => (
+                  <button key={c.id} onClick={() => setClient({ id: c.id, name: c.name })} className="shrink-0 rounded-full px-3.5 py-2 text-sm bg-[var(--surface-alt)] border border-[var(--line)]">
+                    {c.name}
                   </button>
                 ))}
-                <button className="shrink-0 rounded-full px-3.5 py-2 text-sm flex items-center gap-1 border border-dashed border-[var(--line)] text-[var(--moss)]">
-                  <Plus size={14} /> Новый
-                </button>
               </div>
             </div>
           )}
@@ -128,12 +191,6 @@ export default function AppointmentForm() {
         <div className="mx-5 mt-5">
           <div className="text-sm font-medium mb-2 text-[var(--ink-soft)]">Услуга</div>
           <div className="grid grid-cols-2 gap-2.5">
-            {servicesStatus === "loading" && (
-              <div className="col-span-2 text-sm text-center py-4 text-[var(--ink-soft)]">Загружаем услуги…</div>
-            )}
-            {servicesStatus === "error" && (
-              <div className="col-span-2 text-sm text-center py-4 text-[var(--clay)]">Не удалось загрузить услуги</div>
-            )}
             {services.map((s) => {
               const active = service === s.id;
               return (
@@ -203,6 +260,7 @@ export default function AppointmentForm() {
               </button>
             ))}
           </div>
+          <div className="text-xs mt-1.5 text-[var(--ink-soft)]">Повтор пока не создаёт копии записи автоматически — этим займёмся дальше.</div>
         </div>
 
         <div className="mx-5 mt-5">
@@ -214,18 +272,20 @@ export default function AppointmentForm() {
           />
         </div>
 
+        {error && <div className="mx-5 mt-4 text-sm text-[var(--danger)]">{error}</div>}
+
         <div className="fixed bottom-0 left-0 right-0 max-w-sm mx-auto px-5 py-3 bg-[var(--paper)] border-t border-[var(--line)]">
-          {mode === "edit" ? (
+          {!isNew ? (
             <div className="flex items-center gap-2">
-              <button className="rounded-full p-3.5 flex items-center justify-center" style={{ background: "var(--clay-soft)", color: "var(--danger)" }} aria-label="Отменить запись"><X size={18} /></button>
-              <button className="rounded-full p-3.5 flex items-center justify-center bg-[var(--surface-alt)] border border-[var(--line)]" aria-label="Завершить сессию"><Check size={18} /></button>
-              <button onClick={() => navigate("/")} className="flex-1 rounded-full py-3.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
-                Сохранить изменения
+              <button onClick={handleCancelAppointment} disabled={saving} className="rounded-full p-3.5 flex items-center justify-center" style={{ background: "var(--clay-soft)", color: "var(--danger)" }} aria-label="Отменить запись"><X size={18} /></button>
+              <button onClick={handleComplete} disabled={saving} className="rounded-full p-3.5 flex items-center justify-center bg-[var(--surface-alt)] border border-[var(--line)]" aria-label="Завершить сессию"><Check size={18} /></button>
+              <button onClick={handleSave} disabled={saving} className="flex-1 rounded-full py-3.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: saving ? 0.6 : 1 }}>
+                {saving ? "Сохраняем…" : "Сохранить изменения"}
               </button>
             </div>
           ) : (
-            <button onClick={() => navigate("/")} className="w-full rounded-full py-3.5 text-sm font-medium" style={{ background: "var(--clay)", color: "#FBF9F3" }}>
-              Сохранить запись
+            <button onClick={handleSave} disabled={saving} className="w-full rounded-full py-3.5 text-sm font-medium" style={{ background: "var(--clay)", color: "#FBF9F3", opacity: saving ? 0.6 : 1 }}>
+              {saving ? "Сохраняем…" : "Сохранить запись"}
             </button>
           )}
         </div>

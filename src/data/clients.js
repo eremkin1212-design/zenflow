@@ -15,13 +15,9 @@ function formatDate(value) {
 
 async function getAppointmentStats(clientIds) {
   if (!clientIds?.length) return {};
-  const { data, error } = await supabase
-    .from("appointments")
-    .select("id, client_id, date, price, status")
-    .in("client_id", clientIds)
-    .lte("date", new Date().toISOString().slice(0, 10));
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase.from("appointments").select("id, client_id, date, price, status").in("client_id", clientIds).lte("date", today);
   if (error) throw error;
-
   const stats = {};
   for (const id of clientIds) stats[id] = { visits: 0, cancellations: 0, total: 0, lastVisit: null };
   for (const a of data || []) {
@@ -34,8 +30,19 @@ async function getAppointmentStats(clientIds) {
   return stats;
 }
 
-function withStats(client, stats) {
+async function getNextVisits(clientIds) {
+  if (!clientIds?.length) return {};
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase.from("appointments").select("id, client_id, date, start_time, start, status").in("client_id", clientIds).gte("date", today).neq("status", "cancelled").order("date", { ascending: true });
+  if (error) return {};
+  const next = {};
+  for (const a of data || []) if (!next[a.client_id]) next[a.client_id] = { date: a.date, time: a.start_time || a.start || "" };
+  return next;
+}
+
+function withStats(client, stats, nextVisits) {
   const s = stats?.[client.id] || { visits: 0, cancellations: 0, total: 0, lastVisit: null };
+  const next = nextVisits?.[client.id];
   return {
     ...client,
     visits: s.visits,
@@ -43,31 +50,28 @@ function withStats(client, stats) {
     avg_check: s.visits ? Math.round(s.total / s.visits) : 0,
     last_visit: formatDate(s.lastVisit),
     total_spent: s.total,
+    next_visit: next ? `${formatDate(next.date)}${next.time ? `, ${next.time}` : ""}` : "Нет записи",
   };
 }
 
 export async function getClients() {
   const { data, error } = await supabase.from("clients").select("*").order("id", { ascending: true });
   if (error) throw error;
-  const stats = await getAppointmentStats((data || []).map((c) => c.id));
-  return (data || []).map((c) => withStats(c, stats));
+  const ids = (data || []).map((c) => c.id);
+  const [stats, nextVisits] = await Promise.all([getAppointmentStats(ids), getNextVisits(ids)]);
+  return (data || []).map((c) => withStats(c, stats, nextVisits));
 }
 
 export async function getClientById(id) {
   const { data, error } = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const stats = await getAppointmentStats([data.id]);
-  return withStats(data, stats);
+  const [stats, nextVisits] = await Promise.all([getAppointmentStats([data.id]), getNextVisits([data.id])]);
+  return withStats(data, stats, nextVisits);
 }
 
 export async function getHistory(clientId) {
-  const { data, error } = await supabase
-    .from("appointments")
-    .select("id, date, price, status, services(name, color)")
-    .eq("client_id", clientId)
-    .neq("status", "cancelled")
-    .order("date", { ascending: false });
+  const { data, error } = await supabase.from("appointments").select("id, date, price, status, services(name, color)").eq("client_id", clientId).neq("status", "cancelled").order("date", { ascending: false });
   if (error) throw error;
   return (data || []).map((a) => ({ id: a.id, date: formatDate(a.date), price: Number(a.price || 0), service: a.services?.name || "Услуга", color: a.services?.color }));
 }

@@ -44,6 +44,14 @@ body {
   background: var(--paper);
 }
 
+.zf-bottom-nav {
+  background-color: var(--nav-bg) !important;
+  opacity: 1 !important;
+  isolation: isolate;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 @keyframes zf-pulse {
   0%,
   100% {

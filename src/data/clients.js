@@ -23,6 +23,7 @@ async function getAppointmentStats(clientIds) {
   for (const a of data || []) {
     const s = stats[a.client_id] || (stats[a.client_id] = { visits: 0, cancellations: 0, total: 0, lastVisit: null });
     if (a.status === "cancelled") { s.cancellations += 1; continue; }
+    if (a.status !== "done") continue;
     s.visits += 1;
     s.total += Number(a.price || 0);
     if (!s.lastVisit || a.date > s.lastVisit) s.lastVisit = a.date;

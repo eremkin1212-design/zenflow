@@ -224,11 +224,16 @@ export default function AppointmentForm() {
         <div className="grid grid-cols-2 gap-2.5 mx-5 mt-5">
           <div className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
             <div className="text-xs mb-1.5 text-[var(--ink-soft)]">Время</div>
-            <div className="flex items-center justify-between">
-              <button onClick={() => setTimeMin((m) => Math.max(480, m - 30))} aria-label="Раньше" className="rounded-full p-1.5 bg-[var(--surface-alt)]"><Minus size={14} /></button>
-              <span className="text-base font-mono">{minutesToTime(timeMin)}</span>
-              <button onClick={() => setTimeMin((m) => Math.min(1200, m + 30))} aria-label="Позже" className="rounded-full p-1.5 bg-[var(--surface-alt)]"><Plus size={14} /></button>
-            </div>
+            <input
+              type="time"
+              value={minutesToTime(timeMin)}
+              onChange={(e) => {
+                const [h, m] = e.target.value.split(":").map(Number);
+                if (!Number.isNaN(h) && !Number.isNaN(m)) setTimeMin(h * 60 + m);
+              }}
+              step="60"
+              className="w-full bg-transparent outline-none text-base font-mono"
+            />
           </div>
           <div className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)]">
             <div className="text-xs mb-1.5 text-[var(--ink-soft)]">Длительность</div>

@@ -18,7 +18,7 @@ export default function ClientFollowUpCard({ client, followUp }) {
         </div>
       </div>
       <div className="flex gap-2 mt-3">
-        <Link to={`/appointment/new?clientId=${encodeURIComponent(client.id)}`} className="flex-1 rounded-xl py-2.5 text-xs font-medium flex items-center justify-center gap-1.5" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
+        <Link to={`/appointment/new?client=${encodeURIComponent(client.id)}`} className="flex-1 rounded-xl py-2.5 text-xs font-medium flex items-center justify-center gap-1.5" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>
           <CalendarPlus size={14} /> Записать
         </Link>
         <a href={`sms:${client.phone || ""}`} className="rounded-xl px-3 py-2.5 bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center" aria-label={`Написать ${client.name}`}>

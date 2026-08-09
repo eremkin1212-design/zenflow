@@ -114,15 +114,36 @@ export default function Calendar() {
     return toTime(clamped);
   }
 
+  const LONG_PRESS_MS = 300;
+  const SCROLL_CANCEL_PX = 10;
+
   function handlePointerDown(e, a) {
     e.currentTarget.setPointerCapture(e.pointerId);
     const top = ((toMinutes(a.start_time) - DAY_START) / 60) * HOUR_H;
-    setDrag({ id: a.id, startY: e.clientY, startTop: top, currentTop: top, moved: false, duration: a.duration, originalStart: a.start_time });
+    const timerId = setTimeout(() => {
+      setDrag((d) => (d && d.id === a.id ? { ...d, armed: true } : d));
+    }, LONG_PRESS_MS);
+    setDrag({
+      id: a.id, startX: e.clientX, startY: e.clientY, startTop: top, currentTop: top,
+      moved: false, armed: false, duration: a.duration, originalStart: a.start_time, timerId,
+    });
   }
 
   function handlePointerMove(e) {
     if (!drag) return;
+    const deltaX = e.clientX - drag.startX;
     const deltaY = e.clientY - drag.startY;
+
+    if (!drag.armed) {
+      // Пока не удержали достаточно — если палец уже заметно двигается, это скролл: отменяем перенос.
+      if (Math.hypot(deltaX, deltaY) > SCROLL_CANCEL_PX) {
+        clearTimeout(drag.timerId);
+        setDrag(null);
+      }
+      return;
+    }
+
+    e.preventDefault();
     const height = Math.max((drag.duration / 60) * HOUR_H, 40);
     let newTop = drag.startTop + deltaY;
     newTop = Math.max(0, Math.min(newTop, GRID_HEIGHT - height));
@@ -131,6 +152,7 @@ export default function Calendar() {
 
   async function handlePointerUp() {
     if (!drag) return;
+    clearTimeout(drag.timerId);
     const { id, moved, duration, originalStart, currentTop } = drag;
     if (!moved) {
       setSelectedId((prev) => (prev === id ? null : id));
@@ -235,6 +257,7 @@ export default function Calendar() {
 
             {dayAppts.map((a) => {
               const isDragging = drag?.id === a.id;
+              const isArmed = isDragging && drag.armed;
               const top = isDragging ? drag.currentTop : ((toMinutes(a.start_time) - DAY_START) / 60) * HOUR_H;
               const height = Math.max((a.duration / 60) * HOUR_H, 40);
               const isSel = selectedId === a.id;
@@ -250,9 +273,10 @@ export default function Calendar() {
                   className="absolute left-10 right-0 rounded-xl text-left px-3 py-1.5 overflow-hidden select-none"
                   style={{
                     top, height, background: `${color}26`, borderLeft: `3px solid ${color}`,
-                    boxShadow: isSel || isDragging ? `0 0 0 2px ${color}` : "none",
-                    touchAction: "none", cursor: "grab", zIndex: isDragging ? 10 : 1,
-                    transition: isDragging ? "none" : "top 0.15s ease",
+                    boxShadow: isSel || isArmed ? `0 0 0 2px ${color}` : "none",
+                    touchAction: "pan-y", cursor: "grab", zIndex: isDragging ? 10 : 1,
+                    transform: isArmed ? "scale(1.02)" : "scale(1)",
+                    transition: isDragging && drag.moved ? "none" : "top 0.15s ease, transform 0.15s ease",
                   }}
                 >
                   <div className="text-xs font-medium">{liveTime} · {a.clients?.name || "Клиент удалён"}</div>

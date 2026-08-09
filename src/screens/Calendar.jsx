@@ -19,6 +19,7 @@ const DEFAULT_WEEK = [
   { key: "sun", on: false, start: "10:00", end: "16:00", breakStart: null, breakEnd: null },
 ];
 const HOUR_H = 52;
+const CALENDAR_DATE_KEY = "zenflow-calendar-selected-date";
 function minutes(t) { const [h, m] = String(t || "00:00").split(":").map(Number); return h * 60 + m; }
 function time(m) { return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; }
 function startOfWeek(d) { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); x.setHours(0, 0, 0, 0); return x; }
@@ -31,17 +32,25 @@ function hoursForDate(scheduleValue, date) {
   const base = schedule.weekly.find((d) => d.key === KEYS[mondayIndex(date)]) || DEFAULT_WEEK[mondayIndex(date)];
   return schedule.dates[key] ? { ...base, ...schedule.dates[key] } : base;
 }
+function readSavedDate() {
+  try {
+    const saved = localStorage.getItem(CALENDAR_DATE_KEY);
+    if (!saved) return new Date();
+    const d = new Date(`${saved}T12:00:00`);
+    return Number.isNaN(d.getTime()) ? new Date() : d;
+  } catch { return new Date(); }
+}
 
 export default function Calendar() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(readSavedDate);
   const [view, setView] = useState("day");
   const [appts, setAppts] = useState([]);
   const [hours, setHours] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerMonth, setPickerMonth] = useState(new Date());
+  const [pickerMonth, setPickerMonth] = useState(() => { const d = readSavedDate(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [selectedId, setSelectedId] = useState(null);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [drag, setDrag] = useState(null);
@@ -74,7 +83,13 @@ export default function Calendar() {
     return () => { dead = true; };
   }, [weekStart]);
 
-  function goDate(d) { setSelectedDate(new Date(d)); setPickerMonth(new Date(d.getFullYear(), d.getMonth(), 1)); setSelectedId(null); }
+  function goDate(d) {
+    const next = new Date(d);
+    setSelectedDate(next);
+    setPickerMonth(new Date(next.getFullYear(), next.getMonth(), 1));
+    setSelectedId(null);
+    try { localStorage.setItem(CALENDAR_DATE_KEY, fmtDate(next)); } catch {}
+  }
   function shiftDay(n) { goDate(addDays(selectedDate, n)); }
   function shiftWeek(n) { goDate(addDays(selectedDate, n * 7)); }
   function swipeStart(e) { swipe.current = { x: e.clientX, y: e.clientY }; }

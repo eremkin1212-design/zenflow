@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { NavLink } from "react-router-dom";
 import { LayoutGrid, CalendarDays, Users, Wallet, Settings } from "lucide-react";
 
@@ -11,8 +12,11 @@ const NAV = [
 ];
 
 export default function BottomNav() {
-  return (
-    <div className="zf-bottom-nav fixed z-[9999] bottom-0 left-0 right-0 max-w-sm mx-auto flex items-center justify-between px-6 py-3 border-t border-[var(--line)] shadow-[0_-6px_18px_rgba(0,0,0,0.08)]">
+  const nav = (
+    <div
+      className="zf-bottom-nav fixed z-[2147483647] bottom-0 left-0 right-0 max-w-sm mx-auto flex items-center justify-between px-6 py-3 border-t border-[var(--line)] shadow-[0_-6px_18px_rgba(0,0,0,0.08)]"
+      style={{ backgroundColor: "var(--nav-bg)", opacity: 1, pointerEvents: "auto" }}
+    >
       {NAV.map(({ to, label, Icon }) => (
         <NavLink
           key={to}
@@ -34,4 +38,6 @@ export default function BottomNav() {
       ))}
     </div>
   );
+
+  return typeof document === "undefined" ? nav : createPortal(nav, document.body);
 }

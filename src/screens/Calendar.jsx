@@ -158,7 +158,7 @@ export default function Calendar() {
   async function dragEnd() {
     if (!drag) return; const d = drag; setDrag(null);
     if (!d.moved) { setSelectedId((x) => x === d.id ? null : d.id); return; }
-    const next = time(Math.max(gridStart, Math.min(gridEnd - d.duration, Math.round((gridStart + (d.currentTop / HOUR_H) * 60) / 15) * 15));
+    const next = time(Math.max(gridStart, Math.min(gridEnd - d.duration, Math.round((gridStart + (d.currentTop / HOUR_H) * 60) / 15) * 15)));
     const old = appts.find((a) => a.id === d.id)?.start_time; if (next === old) return;
     setAppts((p) => p.map((a) => a.id === d.id ? { ...a, start_time: next } : a));
     try { await updateAppointment(d.id, { start_time: next }); } catch { setAppts((p) => p.map((a) => a.id === d.id ? { ...a, start_time: old } : a)); }

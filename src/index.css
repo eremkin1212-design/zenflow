@@ -52,6 +52,11 @@ body {
   backdrop-filter: none;
 }
 
+/* Keep the selected calendar appointment sheet fully above the bottom nav. */
+.fixed.left-0.right-0.bottom-0.max-w-sm.z-30 {
+  bottom: 84px !important;
+}
+
 @keyframes zf-pulse {
   0%,
   100% {

@@ -74,7 +74,50 @@ export async function getClientById(id) {
 export async function getHistory(clientId) {
   const { data, error } = await supabase.from("appointments").select("id, date, price, status, services(name, color)").eq("client_id", clientId).neq("status", "cancelled").order("date", { ascending: false });
   if (error) throw error;
-  return (data || []).map((a) => ({ id: a.id, date: formatDate(a.date), price: Number(a.price || 0), service: a.services?.name || "Услуга", color: a.services?.color }));
+
+  const appointments = data || [];
+  if (!appointments.length) return [];
+
+  const appointmentIds = appointments.map((a) => a.id);
+  const { data: extraServices, error: servicesError } = await supabase
+    .from("appointment_services")
+    .select("id, appointment_id, service_id, duration, price, services(id, name, color, duration, price)")
+    .in("appointment_id", appointmentIds)
+    .order("id", { ascending: true });
+  if (servicesError) throw servicesError;
+
+  const servicesByAppointment = {};
+  for (const row of extraServices || []) {
+    if (!servicesByAppointment[row.appointment_id]) servicesByAppointment[row.appointment_id] = [];
+    if (row.services) servicesByAppointment[row.appointment_id].push({
+      id: row.service_id,
+      name: row.services.name,
+      color: row.services.color,
+      duration: Number(row.duration || row.services.duration || 0),
+      price: Number(row.price ?? row.services.price ?? 0),
+    });
+  }
+
+  return appointments.map((a) => {
+    const services = servicesByAppointment[a.id];
+    const fallback = a.services ? [{
+      id: a.services.id,
+      name: a.services.name,
+      color: a.services.color,
+      duration: Number(a.services.duration || 0),
+      price: Number(a.services.price || a.price || 0),
+    }] : [{ id: null, name: "Услуга", color: undefined, duration: 0, price: Number(a.price || 0) }];
+    const allServices = services?.length ? services : fallback;
+
+    return {
+      id: a.id,
+      date: formatDate(a.date),
+      price: Number(a.price || 0),
+      service: allServices.map((s) => s.name).join(" · "),
+      services: allServices,
+      color: allServices[0]?.color,
+    };
+  });
 }
 
 export async function getPayments(clientId) {

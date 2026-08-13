@@ -94,6 +94,7 @@ export default function Calendar() {
   const swipe = useRef(null);
   const swiped = useRef(false);
   const stripRef = useRef(null);
+  const stripReady = useRef(false);
   const [stripBase, setStripBase] = useState(() => addDays(startOfWeek(readSavedDate()), -84));
   const stripDates = useMemo(() => Array.from({ length: 175 }, (_, i) => addDays(stripBase, i)), [stripBase]);
 
@@ -149,7 +150,8 @@ export default function Calendar() {
       return;
     }
     const el = stripRef.current?.querySelector(`[data-d="${key}"]`);
-    el?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    el?.scrollIntoView({ inline: "center", block: "nearest", behavior: stripReady.current ? "smooth" : "auto" });
+    if (el) stripReady.current = true;
   }, [selectedDate, stripDates]);
 
   function goDate(d) {

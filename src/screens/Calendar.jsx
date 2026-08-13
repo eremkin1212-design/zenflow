@@ -93,6 +93,9 @@ export default function Calendar() {
   const [savingWorkTime, setSavingWorkTime] = useState(false);
   const swipe = useRef(null);
   const swiped = useRef(false);
+  const stripRef = useRef(null);
+  const [stripBase, setStripBase] = useState(() => addDays(startOfWeek(readSavedDate()), -84));
+  const stripDates = useMemo(() => Array.from({ length: 175 }, (_, i) => addDays(stripBase, i)), [stripBase]);
 
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -137,6 +140,17 @@ export default function Calendar() {
     }).catch(() => { if (!dead) setSelectedServices([]); });
     return () => { dead = true; };
   }, [selected?.id]);
+
+  useEffect(() => {
+    // Если выбранная дата вышла за пределы ленты — пересобираем ленту вокруг неё.
+    const key = fmtDate(selectedDate);
+    if (key < fmtDate(stripDates[0]) || key > fmtDate(stripDates[stripDates.length - 1])) {
+      setStripBase(addDays(startOfWeek(selectedDate), -84));
+      return;
+    }
+    const el = stripRef.current?.querySelector(`[data-d="${key}"]`);
+    el?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [selectedDate, stripDates]);
 
   function goDate(d) {
     const next = new Date(d);
@@ -220,8 +234,9 @@ export default function Calendar() {
     <div className="flex items-center justify-between px-5 pt-7 pb-3"><div className="text-2xl font-serif" style={{ fontWeight: 500 }}>Календарь</div><ThemeToggle /></div>
     <div className="mx-5 flex rounded-full p-1 bg-[var(--surface-alt)] border border-[var(--line)]">{[["day", "День"], ["week", "Неделя"]].map(([k, l]) => <button key={k} onClick={() => setView(k)} className="flex-1 rounded-full py-2 text-sm font-medium" style={{ background: view === k ? "var(--moss)" : "transparent", color: view === k ? "var(--on-accent)" : "var(--ink-soft)" }}>{l}</button>)}</div>
     <div className="mx-5 mt-4 flex items-center justify-between"><button onClick={() => view === "day" ? shiftDay(-1) : shiftWeek(-1)} className="rounded-full p-2 bg-[var(--surface-alt)] border border-[var(--line)]"><ChevronLeft size={17} /></button><button onClick={() => setPickerOpen(true)} className="text-sm font-medium capitalize px-3 py-2 rounded-xl">{view === "day" ? selectedDate.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" }) : `${weekDates[0].toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} — ${weekDates[6].toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}`}</button><button onClick={() => view === "day" ? shiftDay(1) : shiftWeek(1)} className="rounded-full p-2 bg-[var(--surface-alt)] border border-[var(--line)]"><ChevronRight size={17} /></button></div>
-    <div className="flex justify-between mx-5 mt-1 select-none" style={{ touchAction: "pan-y" }} onPointerDown={swipeStart} onPointerUp={swipeEnd} onPointerCancel={() => { swipe.current = null; }}>{weekDates.map((d, i) => { const wh = hoursForDate(hours, d); const active = d.toDateString() === selectedDate.toDateString(); return <button key={d.toISOString()} onClick={() => { if (swiped.current) { swiped.current = false; return; } goDate(d); }} className="flex flex-col items-center gap-1 rounded-xl py-2 w-9" style={{ background: active ? "var(--moss)" : "transparent", color: active ? "var(--on-accent)" : "var(--ink-soft)" }}><span className="text-[10px] uppercase">{WEEKDAYS[i]}</span><span className="text-sm font-medium">{d.getDate()}</span>{wh.on && <span className="w-1 h-1 rounded-full" style={{ background: active ? "var(--on-accent)" : "var(--moss)" }} />}</button>; })}</div>
-    <div className="mx-5 text-center text-[11px] mt-1 text-[var(--ink-soft)]">Свайп влево/вправо — {view === "day" ? "день" : "неделя"}</div>
+    <div ref={stripRef} className="zf-strip flex gap-1 mt-1 px-5 overflow-x-auto select-none" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>{stripDates.map((d) => { const wh = hoursForDate(hours, d); const active = d.toDateString() === selectedDate.toDateString(); const isToday = d.toDateString() === new Date().toDateString(); const firstOfMonth = d.getDate() === 1; return <button key={d.toISOString()} data-d={fmtDate(d)} onClick={() => goDate(d)} className="shrink-0 flex flex-col items-center gap-0.5 rounded-xl py-2 w-10" style={{ background: active ? "var(--moss)" : "transparent", color: active ? "var(--on-accent)" : "var(--ink-soft)" }}><span className="text-[10px] uppercase">{firstOfMonth ? d.toLocaleDateString("ru-RU", { month: "short" }).replace(".", "") : WEEKDAYS[mondayIndex(d)]}</span><span className="text-sm font-medium" style={{ color: active ? "inherit" : isToday ? "var(--clay)" : "var(--ink)" }}>{d.getDate()}</span><span className="w-1 h-1 rounded-full" style={{ background: wh.on ? (active ? "var(--on-accent)" : "var(--moss)") : "transparent" }} /></button>; })}</div>
+    <div className="mx-5 text-center text-[11px] mt-1 text-[var(--ink-soft)]">Листай даты пальцем · свайп по {view === "day" ? "дню" : "неделе"} ниже</div>
+    <style>{`.zf-strip::-webkit-scrollbar{display:none}`}</style>
     {!loading && view === "day" && <div className="mx-5 mt-2 text-center text-xs" style={{ color: dayHours.on ? "var(--ink-soft)" : "var(--clay)" }}>{dayHours.on ? `Работа: ${dayHours.start}–${dayHours.end}${dayHours.breakStart ? ` · перерыв ${dayHours.breakStart}–${dayHours.breakEnd}` : ""}` : <button onClick={openWorkTime} className="underline underline-offset-2" style={{ color: "var(--moss)" }}>Выходной · задать рабочее время</button>}</div>}
     {!loading && view === "day" && hasOverlap && <div className="mx-5 mt-2 rounded-xl px-3 py-2 text-[11px] text-center" style={{ background: "var(--clay-soft)", color: "var(--clay)" }}>Есть записи, которые пересекаются по времени</div>}
     {workTimeOpen && <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/20"><div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-t-3xl p-5 pb-32 bg-[var(--surface)] border border-[var(--line)]"><div className="text-lg font-serif mb-4">Рабочее время</div><div className="flex gap-3"><label className="flex-1 text-xs text-[var(--ink-soft)]">Начало<input type="time" value={workStart} onChange={(e) => setWorkStart(e.target.value)} className="mt-1 w-full rounded-xl p-3 bg-[var(--surface-alt)] border border-[var(--line)] outline-none font-mono" /></label><label className="flex-1 text-xs text-[var(--ink-soft)]">Конец<input type="time" value={workEnd} onChange={(e) => setWorkEnd(e.target.value)} className="mt-1 w-full rounded-xl p-3 bg-[var(--surface-alt)] border border-[var(--line)] outline-none font-mono" /></label></div><div className="flex gap-2 mt-4"><button onClick={() => setWorkTimeOpen(false)} className="flex-1 rounded-full py-3 bg-[var(--surface-alt)]">Отмена</button><button onClick={saveWorkTime} disabled={savingWorkTime} className="flex-1 rounded-full py-3 font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>{savingWorkTime ? "Сохраняем…" : "Сохранить"}</button></div></div></div>}

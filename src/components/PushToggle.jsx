@@ -1,25 +1,35 @@
 import React, { useEffect, useState } from "react";
-import { Bell, BellOff, Check, Send } from "lucide-react";
-import { getPushState, enablePush, disablePush, sendTestPush, isStandalone, isIOS, pushSupported } from "../data/push";
+import { Bell, BellOff, Check } from "lucide-react";
+import { getPushState, enablePush, disablePush, countSubscriptions, isStandalone, isIOS, pushSupported } from "../data/push";
 
 export default function PushToggle() {
 const [state, setState] = useState({ supported: true, permission: "default", subscribed: false });
+const [devices, setDevices] = useState(null);
 const [busy, setBusy] = useState(false);
 const [note, setNote] = useState("");
 const standalone = isStandalone();
 const ios = isIOS();
 
-useEffect(() => { getPushState().then(setState).catch(() => {}); }, []);
+async function refresh() {
+try {
+setState(await getPushState());
+setDevices(await countSubscriptions());
+} catch { /* не критично */ }
+}
+
+useEffect(() => { refresh(); }, []);
 
 async function handleEnable() {
 setBusy(true); setNote("");
 try {
 await enablePush();
-setState(await getPushState());
-setNote("Уведомления включены на этом устройстве");
+await refresh();
+setNote("Готово. Напоминание придёт за 30 минут до записи.");
 } catch (e) {
-if (e?.message === "denied") setNote("Разрешение не выдано. Включить можно в настройках телефона для ZenFlow.");
-else if (e?.message === "unsupported") setNote("Это устройство не поддерживает пуш-уведомления");
+const msg = e?.message;
+if (msg === "denied") setNote("Разрешение не выдано. Включить можно в настройках телефона для ZenFlow.");
+else if (msg === "unsupported") setNote("Это устройство не поддерживает пуш-уведомления.");
+else if (msg === "no-user") setNote("Нужно войти в приложение.");
 else setNote("Не получилось включить. Попробуй ещё раз.");
 } finally { setBusy(false); }
 }
@@ -28,20 +38,10 @@ async function handleDisable() {
 setBusy(true); setNote("");
 try {
 await disablePush();
-setState(await getPushState());
-setNote("Уведомления отключены на этом устройстве");
+await refresh();
+setNote("Уведомления отключены на этом устройстве.");
 } catch {
-setNote("Не получилось отключить");
-} finally { setBusy(false); }
-}
-
-async function handleTest() {
-setBusy(true); setNote("");
-try {
-await sendTestPush();
-setNote("Тестовое уведомление отправлено");
-} catch {
-setNote("Отправщик пока не развёрнут — это следующий шаг");
+setNote("Не получилось отключить.");
 } finally { setBusy(false); }
 }
 
@@ -78,7 +78,9 @@ return (
 Пуши на это устройство
 </div>
 <div className="text-xs mt-1 text-[var(--ink-soft)]">
-{state.subscribed ? "Устройство получает напоминания о записях" : "Напоминания о записях приходят на телефон"}
+{state.subscribed
+? `Напоминание за 30 минут до записи${devices ? ` · устройств: ${devices}` : ""}`
+: "Напоминания о записях будут приходить на телефон"}
 </div>
 </div>
 {state.subscribed ? (
@@ -92,20 +94,20 @@ return (
 )}
 </div>
 
+{state.subscribed && devices === 0 && (
+<div className="text-xs mt-2 text-[var(--clay)]">
+Телефон подписан, но в базе устройства нет. Нажми «Отключить», затем «Включить» ещё раз.
+</div>
+)}
+
 {blocked && (
 <div className="text-xs mt-2 text-[var(--clay)]">
 Уведомления заблокированы в настройках телефона. Разреши их для ZenFlow и вернись сюда.
 </div>
 )}
 
-{state.subscribed && (
-<button onClick={handleTest} disabled={busy} className="mt-3 w-full rounded-full py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 bg-[var(--surface-alt)]">
-<Send size={13} /> Прислать тестовое
-</button>
-)}
-
 {note && (
-<div className="text-xs mt-2 flex items-start gap-1.5" style={{ color: "var(--ink-soft)" }}>
+<div className="text-xs mt-2 flex items-start gap-1.5 text-[var(--ink-soft)]">
 <Check size={13} className="mt-0.5 shrink-0 text-[var(--moss)]" />
 <span>{note}</span>
 </div>

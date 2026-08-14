@@ -12,178 +12,52 @@ import PushToggle from "../components/PushToggle";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const COLOR_OPTIONS = ["#7C9A86", "#B98572", "#9C8FB0", "#C6A15B", "#6B8CAE"];
-
-function fmtDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-function monthCells(month) {
-  const first = new Date(month.getFullYear(), month.getMonth(), 1);
-  const offset = (first.getDay() + 6) % 7;
-  const count = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-  const cells = Array(offset).fill(null);
-  for (let day = 1; day <= count; day++) cells.push(new Date(month.getFullYear(), month.getMonth(), day));
-  while (cells.length % 7) cells.push(null);
-  return cells;
-}
-function normalizeSchedule(value) {
-  const dates = value && !Array.isArray(value) && value.dates && typeof value.dates === "object" ? value.dates : {};
-  return { dates };
-}
-function emptyDay() {
-  return { on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null };
-}
+function fmtDate(d) { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const day = String(d.getDate()).padStart(2, "0"); return `${y}-${m}-${day}`; }
+function monthCells(month) { const first = new Date(month.getFullYear(), month.getMonth(), 1); const offset = (first.getDay() + 6) % 7; const count = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate(); const cells = Array(offset).fill(null); for (let day = 1; day <= count; day++) cells.push(new Date(month.getFullYear(), month.getMonth(), day)); while (cells.length % 7) cells.push(null); return cells; }
+function normalizeSchedule(value) { const dates = value && !Array.isArray(value) && value.dates && typeof value.dates === "object" ? value.dates : {}; return { dates }; }
+function emptyDay() { return { on: false, start: "10:00", end: "22:00", breakStart: null, breakEnd: null }; }
 function cloneDay(day) { return { ...day }; }
-function Row({ left, right, sub }) {
-  return <div className="flex items-center justify-between py-3"><div><div className="text-sm">{left}</div>{sub && <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{sub}</div>}</div>{right}</div>;
-}
-function TimeField({ label, value, onChange }) {
-  return <div className="flex-1"><div className="text-[10px] mb-1 text-[var(--ink-soft)]">{label}</div><input type="time" value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full rounded-xl p-2 text-sm bg-[var(--surface)] border border-[var(--line)] outline-none font-mono" /></div>;
-}
+function Row({ left, right, sub }) { return <div className="flex items-center justify-between py-3"><div><div className="text-sm">{left}</div>{sub && <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{sub}</div>}</div>{right}</div>; }
+function TimeField({ label, value, onChange }) { return <div className="flex-1"><div className="text-[10px] mb-1 text-[var(--ink-soft)]">{label}</div><input type="time" value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full rounded-xl p-2 text-sm bg-[var(--surface)] border border-[var(--line)] outline-none font-mono" /></div>; }
 
 export default function Settings() {
-  const { dark, setDark } = useTheme();
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
-  const fileInputRef = useRef(null);
-  const [profile, setProfile] = useState(null);
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [profileDraft, setProfileDraft] = useState({ name: "", role: "", phone: "" });
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [schedule, setSchedule] = useState({ dates: {} });
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [calendarMonth, setCalendarMonth] = useState(new Date());
-  const [copyOpen, setCopyOpen] = useState(false);
-  const [copyMonth, setCopyMonth] = useState(new Date());
-  const [copyDates, setCopyDates] = useState({});
-  const [savingHours, setSavingHours] = useState(false);
-  const [hoursDirty, setHoursDirty] = useState(false);
-  const [notify, setNotify] = useState({ client: true, me: true, sound: false });
-  const [services, setServices] = useState([]);
-  const [servicesStatus, setServicesStatus] = useState("loading");
-  const [showAddService, setShowAddService] = useState(false);
-  const [newService, setNewService] = useState({ name: "", duration: 60, price: 0, color: COLOR_OPTIONS[0] });
-  const [savingService, setSavingService] = useState(false);
-  const [editingServiceId, setEditingServiceId] = useState(null);
-  const [editDraft, setEditDraft] = useState(null);
+  const { dark, setDark } = useTheme(); const { user, signOut } = useAuth(); const navigate = useNavigate(); const fileInputRef = useRef(null);
+  const [profile, setProfile] = useState(null); const [editingProfile, setEditingProfile] = useState(false); const [profileDraft, setProfileDraft] = useState({ name: "", role: "", phone: "" }); const [savingProfile, setSavingProfile] = useState(false); const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [schedule, setSchedule] = useState({ dates: {} }); const [selectedDate, setSelectedDate] = useState(new Date()); const [calendarMonth, setCalendarMonth] = useState(new Date()); const [copyOpen, setCopyOpen] = useState(false); const [copyMonth, setCopyMonth] = useState(new Date()); const [copyDates, setCopyDates] = useState({}); const [savingHours, setSavingHours] = useState(false); const [hoursDirty, setHoursDirty] = useState(false);
+  const [notify, setNotify] = useState({ client: true, me: true, sound: false }); const [savingNotify, setSavingNotify] = useState(false);
+  const [services, setServices] = useState([]); const [servicesStatus, setServicesStatus] = useState("loading"); const [showAddService, setShowAddService] = useState(false); const [newService, setNewService] = useState({ name: "", duration: 60, price: 0, color: COLOR_OPTIONS[0] }); const [savingService, setSavingService] = useState(false); const [editingServiceId, setEditingServiceId] = useState(null); const [editDraft, setEditDraft] = useState(null);
 
-  useEffect(() => {
-    if (!user) return;
-    getProfile(user.id).then((p) => {
-      setProfile(p);
-      setProfileDraft({ name: p?.name || "", role: p?.role || "Специалист", phone: p?.phone || "" });
-      setSchedule(normalizeSchedule(p?.working_hours));
-    }).catch(() => {});
-  }, [user]);
-
-  useEffect(() => {
-    let cancelled = false;
-    getServices().then((data) => { if (!cancelled) { setServices(data); setServicesStatus("ready"); } }).catch(() => { if (!cancelled) setServicesStatus("error"); });
-    return () => { cancelled = true; };
-  }, []);
-
-  const selectedKey = fmtDate(selectedDate);
-  const selectedDay = schedule.dates[selectedKey] ? { ...emptyDay(), ...schedule.dates[selectedKey] } : emptyDay();
-  const hasSchedule = Boolean(schedule.dates[selectedKey]?.on);
-  const selectedMonthCells = useMemo(() => monthCells(calendarMonth), [calendarMonth]);
-  const copyMonthCells = useMemo(() => monthCells(copyMonth), [copyMonth]);
-
-  async function persistSchedule(nextSchedule) {
-    if (!user) return;
-    setSavingHours(true);
-    try { await updateProfile(user.id, { working_hours: nextSchedule }); setHoursDirty(false); }
-    catch { setHoursDirty(true); window.alert("Не удалось сохранить рабочее время. Проверь подключение."); }
-    finally { setSavingHours(false); }
-  }
-  function updateSelectedDay(fields) {
-    setSchedule((prev) => { const nextSchedule = { ...prev, dates: { ...prev.dates, [selectedKey]: { ...(prev.dates[selectedKey] || emptyDay()), ...fields } } }; void persistSchedule(nextSchedule); return nextSchedule; });
-    setHoursDirty(true);
-  }
-  function resetSelectedDay() {
-    setSchedule((prev) => { const dates = { ...prev.dates }; delete dates[selectedKey]; const nextSchedule = { ...prev, dates }; void persistSchedule(nextSchedule); return nextSchedule; });
-    setHoursDirty(true);
-  }
+  useEffect(() => { if (!user) return; getProfile(user.id).then((p) => { setProfile(p); setProfileDraft({ name: p?.name || "", role: p?.role || "Специалист", phone: p?.phone || "" }); setSchedule(normalizeSchedule(p?.working_hours)); setNotify({ client: p?.notify_client ?? true, me: p?.notify_me ?? true, sound: p?.notify_sound ?? false }); }).catch(() => {}); }, [user]);
+  useEffect(() => { let cancelled = false; getServices().then((data) => { if (!cancelled) { setServices(data); setServicesStatus("ready"); } }).catch(() => { if (!cancelled) setServicesStatus("error"); }); return () => { cancelled = true; }; }, []);
+  const selectedKey = fmtDate(selectedDate); const selectedDay = schedule.dates[selectedKey] ? { ...emptyDay(), ...schedule.dates[selectedKey] } : emptyDay(); const hasSchedule = Boolean(schedule.dates[selectedKey]?.on); const selectedMonthCells = useMemo(() => monthCells(calendarMonth), [calendarMonth]); const copyMonthCells = useMemo(() => monthCells(copyMonth), [copyMonth]);
+  async function persistSchedule(nextSchedule) { if (!user) return; setSavingHours(true); try { await updateProfile(user.id, { working_hours: nextSchedule }); setHoursDirty(false); } catch { setHoursDirty(true); window.alert("Не удалось сохранить рабочее время. Проверь подключение."); } finally { setSavingHours(false); } }
+  function updateSelectedDay(fields) { setSchedule((prev) => { const nextSchedule = { ...prev, dates: { ...prev.dates, [selectedKey]: { ...(prev.dates[selectedKey] || emptyDay()), ...fields } } }; void persistSchedule(nextSchedule); return nextSchedule; }); setHoursDirty(true); }
+  function resetSelectedDay() { setSchedule((prev) => { const dates = { ...prev.dates }; delete dates[selectedKey]; const nextSchedule = { ...prev, dates }; void persistSchedule(nextSchedule); return nextSchedule; }); setHoursDirty(true); }
   async function handleSaveHours() { await persistSchedule(schedule); }
   function openCopy() { setCopyMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)); setCopyDates({}); setCopyOpen(true); }
-  function toggleCopyDate(d) {
-    const key = fmtDate(d);
-    if (key === selectedKey) return;
-    setCopyDates((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-  function applyCopy() {
-    const targets = Object.keys(copyDates).filter((k) => copyDates[k]);
-    if (!targets.length) return;
-    setSchedule((prev) => {
-      const dates = { ...prev.dates };
-      targets.forEach((key) => { dates[key] = cloneDay(selectedDay); });
-      const nextSchedule = { ...prev, dates };
-      void persistSchedule(nextSchedule);
-      return nextSchedule;
-    });
-    setHoursDirty(true);
-    setCopyOpen(false);
-  }
-  async function handleSaveProfile() {
-    setSavingProfile(true);
-    try { const updated = await updateProfile(user.id, profileDraft); setProfile(updated); setEditingProfile(false); }
-    catch { window.alert("Не удалось сохранить профиль. Проверь подключение."); }
-    finally { setSavingProfile(false); }
-  }
-  async function handleAvatarChange(e) {
-    const file = e.target.files?.[0]; if (!file) return;
-    setUploadingAvatar(true);
-    try { const url = await uploadAvatar(user.id, file); setProfile(await updateProfile(user.id, { avatar_url: url })); }
-    catch { window.alert("Не удалось загрузить фото. Проверь подключение."); }
-    finally { setUploadingAvatar(false); }
-  }
+  function toggleCopyDate(d) { const key = fmtDate(d); if (key === selectedKey) return; setCopyDates((prev) => ({ ...prev, [key]: !prev[key] })); }
+  function applyCopy() { const targets = Object.keys(copyDates).filter((k) => copyDates[k]); if (!targets.length) return; setSchedule((prev) => { const dates = { ...prev.dates }; targets.forEach((key) => { dates[key] = cloneDay(selectedDay); }); const nextSchedule = { ...prev, dates }; void persistSchedule(nextSchedule); return nextSchedule; }); setHoursDirty(true); setCopyOpen(false); }
+  async function persistNotify(next) { if (!user) return; setSavingNotify(true); try { const updated = await updateProfile(user.id, { notify_client: next.client, notify_me: next.me, notify_sound: next.sound }); setProfile((p) => ({ ...(p || {}), ...updated })); setNotify({ client: updated?.notify_client ?? next.client, me: updated?.notify_me ?? next.me, sound: updated?.notify_sound ?? next.sound }); } catch { window.alert("Не удалось сохранить настройку уведомлений. Проверь подключение."); } finally { setSavingNotify(false); } }
+  function changeNotify(key) { const next = { ...notify, [key]: !notify[key] }; setNotify(next); void persistNotify(next); }
+  async function handleSaveProfile() { setSavingProfile(true); try { const updated = await updateProfile(user.id, profileDraft); setProfile(updated); setEditingProfile(false); } catch { window.alert("Не удалось сохранить профиль. Проверь подключение."); } finally { setSavingProfile(false); } }
+  async function handleAvatarChange(e) { const file = e.target.files?.[0]; if (!file) return; setUploadingAvatar(true); try { const url = await uploadAvatar(user.id, file); setProfile(await updateProfile(user.id, { avatar_url: url })); } catch { window.alert("Не удалось загрузить фото. Проверь подключение."); } finally { setUploadingAvatar(false); } }
   async function handleSignOut() { await signOut(); navigate("/login"); }
-  async function handleAddService() {
-    if (!newService.name.trim()) return;
-    setSavingService(true);
-    try { const created = await createService(newService); setServices((p) => [...p, created]); setNewService({ name: "", duration: 60, price: 0, color: COLOR_OPTIONS[0] }); setShowAddService(false); }
-    catch { window.alert("Не удалось сохранить услугу. Проверь подключение."); }
-    finally { setSavingService(false); }
-  }
+  async function handleAddService() { if (!newService.name.trim()) return; setSavingService(true); try { const created = await createService(newService); setServices((p) => [...p, created]); setNewService({ name: "", duration: 60, price: 0, color: COLOR_OPTIONS[0] }); setShowAddService(false); } catch { window.alert("Не удалось сохранить услугу. Проверь подключение."); } finally { setSavingService(false); } }
   function startEditService(s) { setEditingServiceId(s.id); setEditDraft({ name: s.name, duration: s.duration, price: s.price, color: s.color }); }
-  async function handleSaveServiceEdit() {
-    setSavingService(true);
-    try { const updated = await updateService(editingServiceId, editDraft); setServices((p) => p.map((s) => s.id === editingServiceId ? updated : s)); setEditingServiceId(null); }
-    catch { window.alert("Не удалось сохранить изменения. Проверь подключение."); }
-    finally { setSavingService(false); }
-  }
-  async function handleDeleteService(id, name) {
-    if (!window.confirm(`Удалить услугу «${name}»?`)) return;
-    try { await deleteService(id); setServices((p) => p.filter((s) => s.id !== id)); }
-    catch { window.alert("Не удалось удалить. Проверь подключение и попробуй снова."); }
-  }
+  async function handleSaveServiceEdit() { setSavingService(true); try { const updated = await updateService(editingServiceId, editDraft); setServices((p) => p.map((s) => s.id === editingServiceId ? updated : s)); setEditingServiceId(null); } catch { window.alert("Не удалось сохранить изменения. Проверь подключение."); } finally { setSavingService(false); } }
+  async function handleDeleteService(id, name) { if (!window.confirm(`Удалить услугу «${name}»?`)) return; try { await deleteService(id); setServices((p) => p.filter((s) => s.id !== id)); } catch { window.alert("Не удалось удалить. Проверь подключение и попробуй снова."); } }
 
   return <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans transition-colors"><div className="max-w-sm mx-auto relative pb-24">
     <div className="flex items-center justify-between px-5 pt-7 pb-3"><div className="text-2xl font-serif" style={{ fontWeight: 500 }}>Настройки</div><ThemeToggle /></div>
     <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
     {editingProfile ? <div className="mx-5 rounded-2xl p-4 flex flex-col gap-2.5 bg-[var(--surface)] border border-[var(--line)]"><input value={profileDraft.name} onChange={(e) => setProfileDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Имя" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" /><input value={profileDraft.role} onChange={(e) => setProfileDraft((d) => ({ ...d, role: e.target.value }))} placeholder="Роль" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" /><input value={profileDraft.phone} onChange={(e) => setProfileDraft((d) => ({ ...d, phone: e.target.value }))} placeholder="Телефон" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" /><div className="flex gap-2"><button onClick={() => setEditingProfile(false)} className="flex-1 rounded-full py-2.5 text-sm bg-[var(--surface-alt)]">Отмена</button><button onClick={handleSaveProfile} disabled={savingProfile} className="flex-1 rounded-full py-2.5 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)" }}>{savingProfile ? "Сохраняем…" : "Сохранить"}</button></div></div> : <div className="mx-5 rounded-2xl p-4 flex items-center gap-3 bg-[var(--surface)] border border-[var(--line)]"><button onClick={() => fileInputRef.current?.click()} disabled={uploadingAvatar} className="relative rounded-full shrink-0" style={{ width: 52, height: 52 }}>{profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="w-full h-full rounded-full object-cover" /> : <div className="w-full h-full rounded-full flex items-center justify-center font-serif" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>{(profile?.name || user?.email || "??").slice(0, 2).toUpperCase()}</div>}<span className="absolute -bottom-0.5 -right-0.5 rounded-full p-1 bg-[var(--moss)]" style={{ color: "var(--on-accent)" }}><Camera size={11} /></span></button><button onClick={() => setEditingProfile(true)} className="flex-1 text-left"><div className="text-sm font-medium">{profile?.name || "Без имени"}</div><div className="text-xs mt-0.5 text-[var(--ink-soft)]">{profile?.role || "Специалист"}{profile?.phone ? ` · ${profile.phone}` : ""}</div></button><ChevronRight size={16} className="text-[var(--ink-soft)]" /></div>}
-
     <div className="mx-5 mt-6"><div className="flex items-center justify-between mb-1"><div><div className="text-sm font-medium text-[var(--ink-soft)]">Рабочее время</div><div className="text-xs mt-0.5 text-[var(--ink-soft)]">Каждая дата настраивается отдельно</div></div>{hoursDirty && <button onClick={handleSaveHours} disabled={savingHours} className="text-xs font-medium flex items-center gap-1" style={{ color: "var(--moss)" }}><Check size={13} />{savingHours ? "Сохраняем…" : "Сохранить"}</button>}</div>
-      <div className="rounded-2xl p-4 bg-[var(--surface)] border border-[var(--line)]">
-        <div className="flex items-center justify-between mb-3"><button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} className="p-2 rounded-full bg-[var(--surface-alt)]"><ChevronLeft size={17} /></button><div className="text-base font-serif capitalize">{calendarMonth.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</div><button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))} className="p-2 rounded-full bg-[var(--surface-alt)]"><ChevronRight size={17} /></button></div>
-        <div className="grid grid-cols-7 gap-1">{WEEKDAYS.map((d) => <div key={d} className="text-[10px] text-center py-1 text-[var(--ink-soft)]">{d}</div>)}{selectedMonthCells.map((d, i) => d ? <button key={i} onClick={() => setSelectedDate(d)} className="aspect-square rounded-xl text-sm relative" style={{ background: d.toDateString() === selectedDate.toDateString() ? "var(--moss)" : "transparent", color: d.toDateString() === selectedDate.toDateString() ? "var(--on-accent)" : "var(--ink)" }}>{d.getDate()}{schedule.dates[fmtDate(d)]?.on && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" style={{ background: d.toDateString() === selectedDate.toDateString() ? "var(--on-accent)" : "var(--moss)" }} />}</button> : <span key={i} />)}</div>
-        <div className="mt-4 rounded-2xl p-3 bg-[var(--surface-alt)]"><div className="flex items-center justify-between"><div><div className="text-sm font-medium capitalize">{selectedDate.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</div><div className="text-xs mt-0.5" style={{ color: hasSchedule ? "var(--moss)" : "var(--ink-soft)" }}>{hasSchedule ? "Рабочий график задан" : "График не задан · выходной"}</div></div><button onClick={() => setSelectedDate(new Date())} className="text-xs text-[var(--moss)]">Сегодня</button></div>
-          <div className="flex items-center justify-between mt-3"><span className="text-sm">Рабочий день</span><Switch on={selectedDay.on} onChange={() => updateSelectedDay({ on: !selectedDay.on })} label="Рабочий день" /></div>
-          {selectedDay.on ? <div className="mt-3 flex flex-col gap-2"><div className="flex gap-2"><TimeField label="Начало" value={selectedDay.start} onChange={(v) => updateSelectedDay({ start: v })} /><TimeField label="Окончание" value={selectedDay.end} onChange={(v) => updateSelectedDay({ end: v })} /></div>{selectedDay.breakStart != null ? <div className="flex gap-2 items-end"><TimeField label="Перерыв с" value={selectedDay.breakStart} onChange={(v) => updateSelectedDay({ breakStart: v })} /><TimeField label="Перерыв до" value={selectedDay.breakEnd} onChange={(v) => updateSelectedDay({ breakEnd: v })} /><button onClick={() => updateSelectedDay({ breakStart: null, breakEnd: null })} className="rounded-xl p-2 bg-[var(--surface)]" aria-label="Убрать перерыв"><X size={14} className="text-[var(--danger)]" /></button></div> : <button onClick={() => updateSelectedDay({ breakStart: "13:00", breakEnd: "14:00" })} className="text-xs font-medium text-left" style={{ color: "var(--moss)" }}>+ Добавить перерыв</button>}</div> : <div className="text-xs mt-2 text-[var(--ink-soft)]">Выходной — записи на эту дату не предлагаются.</div>}
-          <div className="flex gap-2 mt-3"><button onClick={openCopy} className="flex-1 rounded-full py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 bg-[var(--surface)] border border-[var(--line)]"><Copy size={14} />Скопировать на даты</button>{hasSchedule && <button onClick={resetSelectedDay} className="rounded-full px-3 py-2.5 text-xs font-medium bg-[var(--surface)] text-[var(--danger)]">Сбросить</button>}</div>
-        </div>
-        <div className="mt-3 text-xs text-[var(--ink-soft)]">Точка под датой означает, что для неё задан рабочий график.</div>
-      </div>
+      <div className="rounded-2xl p-4 bg-[var(--surface)] border border-[var(--line)]"><div className="flex items-center justify-between mb-3"><button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} className="p-2 rounded-full bg-[var(--surface-alt)]"><ChevronLeft size={17} /></button><div className="text-base font-serif capitalize">{calendarMonth.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</div><button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))} className="p-2 rounded-full bg-[var(--surface-alt)]"><ChevronRight size={17} /></button></div><div className="grid grid-cols-7 gap-1">{WEEKDAYS.map((d) => <div key={d} className="text-[10px] text-center py-1 text-[var(--ink-soft)]">{d}</div>)}{selectedMonthCells.map((d, i) => d ? <button key={i} onClick={() => setSelectedDate(d)} className="aspect-square rounded-xl text-sm relative" style={{ background: d.toDateString() === selectedDate.toDateString() ? "var(--moss)" : "transparent", color: d.toDateString() === selectedDate.toDateString() ? "var(--on-accent)" : "var(--ink)" }}>{d.getDate()}{schedule.dates[fmtDate(d)]?.on && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" style={{ background: d.toDateString() === selectedDate.toDateString() ? "var(--on-accent)" : "var(--moss)" }} />}</button> : <span key={i} />)}</div><div className="mt-4 rounded-2xl p-3 bg-[var(--surface-alt)]"><div className="flex items-center justify-between"><div><div className="text-sm font-medium capitalize">{selectedDate.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</div><div className="text-xs mt-0.5" style={{ color: hasSchedule ? "var(--moss)" : "var(--ink-soft)" }}>{hasSchedule ? "Рабочий график задан" : "График не задан · выходной"}</div></div><button onClick={() => setSelectedDate(new Date())} className="text-xs text-[var(--moss)]">Сегодня</button></div><div className="flex items-center justify-between mt-3"><span className="text-sm">Рабочий день</span><Switch on={selectedDay.on} onChange={() => updateSelectedDay({ on: !selectedDay.on })} label="Рабочий день" /></div>{selectedDay.on ? <div className="mt-3 flex flex-col gap-2"><div className="flex gap-2"><TimeField label="Начало" value={selectedDay.start} onChange={(v) => updateSelectedDay({ start: v })} /><TimeField label="Окончание" value={selectedDay.end} onChange={(v) => updateSelectedDay({ end: v })} /></div>{selectedDay.breakStart != null ? <div className="flex gap-2 items-end"><TimeField label="Перерыв с" value={selectedDay.breakStart} onChange={(v) => updateSelectedDay({ breakStart: v })} /><TimeField label="Перерыв до" value={selectedDay.breakEnd} onChange={(v) => updateSelectedDay({ breakEnd: v })} /><button onClick={() => updateSelectedDay({ breakStart: null, breakEnd: null })} className="rounded-xl p-2 bg-[var(--surface)]" aria-label="Убрать перерыв"><X size={14} className="text-[var(--danger)]" /></button></div> : <button onClick={() => updateSelectedDay({ breakStart: "13:00", breakEnd: "14:00" })} className="text-xs font-medium text-left" style={{ color: "var(--moss)" }}>+ Добавить перерыв</button>}</div> : <div className="text-xs mt-2 text-[var(--ink-soft)]">Выходной — записи на эту дату не предлагаются.</div>}<div className="flex gap-2 mt-3"><button onClick={openCopy} className="flex-1 rounded-full py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 bg-[var(--surface)] border border-[var(--line)]"><Copy size={14} />Скопировать на даты</button>{hasSchedule && <button onClick={resetSelectedDay} className="rounded-full px-3 py-2.5 text-xs font-medium bg-[var(--surface)] text-[var(--danger)]">Сбросить</button>}</div></div><div className="mt-3 text-xs text-[var(--ink-soft)]">Точка под датой означает, что для неё задан рабочий график.</div></div>
     </div>
-
     <div className="mx-5 mt-6"><div className="text-sm font-medium mb-1 text-[var(--ink-soft)]">Услуги и стоимость</div>{servicesStatus === "loading" && <div className="text-sm text-center py-6 text-[var(--ink-soft)]">Загружаем услуги…</div>}{servicesStatus === "error" && <div className="text-sm text-center py-6 text-[var(--clay)]">Не удалось загрузить услуги</div>}{servicesStatus === "ready" && <><div className="rounded-2xl px-4 bg-[var(--surface)] border border-[var(--line)]">{services.map((s, i) => <div key={s.id} style={{ borderTop: i ? "1px solid var(--line)" : "none" }}>{editingServiceId === s.id ? <div className="py-3 flex flex-col gap-2"><input value={editDraft.name} onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))} className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" /><div className="grid grid-cols-2 gap-2"><input type="number" value={editDraft.duration} onChange={(e) => setEditDraft((d) => ({ ...d, duration: Number(e.target.value) || 0 }))} placeholder="Минуты" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" /><input type="number" value={editDraft.price} onChange={(e) => setEditDraft((d) => ({ ...d, price: Number(e.target.value) || 0 }))} placeholder="Цена ₽" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" /></div><div className="flex gap-2">{COLOR_OPTIONS.map((c) => <button key={c} onClick={() => setEditDraft((d) => ({ ...d, color: c }))} className="rounded-full" style={{ width: 20, height: 20, background: c, boxShadow: editDraft.color === c ? "0 0 0 2px var(--ink)" : "none" }} />)}</div><div className="flex gap-2"><button onClick={() => setEditingServiceId(null)} className="flex-1 rounded-full py-2 bg-[var(--surface-alt)]">Отмена</button><button onClick={handleSaveServiceEdit} disabled={savingService} className="flex-1 rounded-full py-2 bg-[var(--moss)] text-[var(--on-accent)]">Сохранить</button></div></div> : <Row left={<span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: s.color }} />{s.name}</span>} sub={`${s.duration} мин`} right={<span className="flex items-center gap-1.5 text-sm"><span className="font-mono">{s.price.toLocaleString("ru-RU")} ₽</span><button onClick={() => startEditService(s)} className="p-1"><Pencil size={14} className="text-[var(--moss)]" /></button><button onClick={() => handleDeleteService(s.id, s.name)} className="p-1"><Trash2 size={14} className="text-[var(--danger)]" /></button></span>} />}</div>)}</div>{showAddService ? <div className="mt-2.5 rounded-2xl p-3.5 flex flex-col gap-2.5 bg-[var(--surface)] border border-[var(--line)]"><input value={newService.name} onChange={(e) => setNewService((s) => ({ ...s, name: e.target.value }))} placeholder="Название услуги" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" /><div className="grid grid-cols-2 gap-2"><input type="number" value={newService.duration} onChange={(e) => setNewService((s) => ({ ...s, duration: Number(e.target.value) || 0 }))} placeholder="Минуты" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" /><input type="number" value={newService.price} onChange={(e) => setNewService((s) => ({ ...s, price: Number(e.target.value) || 0 }))} placeholder="Цена ₽" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" /></div><div className="flex gap-2">{COLOR_OPTIONS.map((c) => <button key={c} onClick={() => setNewService((s) => ({ ...s, color: c }))} className="rounded-full" style={{ width: 22, height: 22, background: c, boxShadow: newService.color === c ? "0 0 0 2px var(--ink)" : "none" }} />)}</div><div className="flex gap-2"><button onClick={() => setShowAddService(false)} className="flex-1 rounded-full py-2.5 bg-[var(--surface-alt)]">Отмена</button><button onClick={handleAddService} disabled={savingService} className="flex-1 rounded-full py-2.5 bg-[var(--moss)] text-[var(--on-accent)]">Сохранить</button></div></div> : <button onClick={() => setShowAddService(true)} className="mt-2.5 w-full rounded-2xl py-3 text-sm font-medium flex items-center justify-center gap-1.5 border border-dashed border-[var(--line)] text-[var(--moss)]"><Plus size={15} />Добавить услугу</button>}</>}</div>
-
-    <div className="mx-5 mt-6"><div className="text-sm font-medium mb-1 text-[var(--ink-soft)]">Уведомления</div><div className="mb-2.5"><PushToggle /></div><div className="rounded-2xl px-4 bg-[var(--surface)] border border-[var(--line)]"><Row left="Напоминание клиенту" sub="За 2 часа до записи" right={<Switch on={notify.client} onChange={() => setNotify((n) => ({ ...n, client: !n.client }))} label="Напоминание клиенту" />} /><div style={{ borderTop: "1px solid var(--line)" }}><Row left="Напоминание мне" sub="За 30 минут до записи" right={<Switch on={notify.me} onChange={() => setNotify((n) => ({ ...n, me: !n.me }))} label="Напоминание мне" />} /></div><div style={{ borderTop: "1px solid var(--line)" }}><Row left="Звук уведомлений" right={<Switch on={notify.sound} onChange={() => setNotify((n) => ({ ...n, sound: !n.sound }))} label="Звук уведомлений" />} /></div></div></div>
+    <div className="mx-5 mt-6"><div className="text-sm font-medium mb-1 text-[var(--ink-soft)]">Уведомления</div><div className="mb-2.5"><PushToggle /></div><div className="rounded-2xl px-4 bg-[var(--surface)] border border-[var(--line)]"><Row left="Напоминание клиенту" sub="За 2 часа до записи" right={<Switch on={notify.client} disabled={savingNotify} onChange={() => changeNotify("client")} label="Напоминание клиенту" />} /><div style={{ borderTop: "1px solid var(--line)" }}><Row left="Напоминание мне" sub="За 30 минут до записи" right={<Switch on={notify.me} disabled={savingNotify} onChange={() => changeNotify("me")} label="Напоминание мне" />} /></div><div style={{ borderTop: "1px solid var(--line)" }}><Row left="Звук уведомлений" right={<Switch on={notify.sound} disabled={savingNotify} onChange={() => changeNotify("sound")} label="Звук уведомлений" />} /></div></div></div>
     <div className="mx-5 mt-6"><div className="text-sm font-medium mb-1 text-[var(--ink-soft)]">Тема</div><div className="flex rounded-full p-1 bg-[var(--surface-alt)] border border-[var(--line)]">{[["light", "Светлая", false], ["dark", "Тёмная", true]].map(([key, label, val]) => <button key={key} onClick={() => setDark(val)} className="flex-1 rounded-full py-2 text-sm font-medium" style={{ background: dark === val ? "var(--moss)" : "transparent", color: dark === val ? "var(--on-accent)" : "var(--ink-soft)" }}>{label}</button>)}</div></div>
     <div className="mx-5 mt-6"><button onClick={handleSignOut} className="w-full rounded-2xl p-4 flex items-center justify-center gap-2 text-sm font-medium" style={{ background: "var(--clay-soft)", color: "var(--clay)" }}><LogOut size={16} />Выйти из аккаунта</button></div>
-
     {copyOpen && <><div className="fixed inset-0 z-40 bg-black/30" onClick={() => setCopyOpen(false)} /><div className="fixed left-0 right-0 bottom-0 max-w-sm mx-auto z-50 rounded-t-3xl p-5 bg-[var(--surface)]"><div className="flex items-center justify-between"><button onClick={() => setCopyMonth(new Date(copyMonth.getFullYear(), copyMonth.getMonth() - 1, 1))} className="p-2 rounded-full bg-[var(--surface-alt)]"><ChevronLeft size={17} /></button><div className="text-base font-serif capitalize">Скопировать график</div><button onClick={() => setCopyMonth(new Date(copyMonth.getFullYear(), copyMonth.getMonth() + 1, 1))} className="p-2 rounded-full bg-[var(--surface-alt)]"><ChevronRight size={17} /></button></div><div className="text-xs mt-1 text-center text-[var(--ink-soft)]">Выберите даты, на которые применить график {selectedDate.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</div><div className="grid grid-cols-7 gap-1 mt-4">{WEEKDAYS.map((d) => <div key={d} className="text-[10px] text-center py-1 text-[var(--ink-soft)]">{d}</div>)}{copyMonthCells.map((d, i) => d ? <button key={i} disabled={d.toDateString() === selectedDate.toDateString()} onClick={() => toggleCopyDate(d)} className="aspect-square rounded-xl text-sm" style={{ background: copyDates[fmtDate(d)] ? "var(--moss)" : "var(--surface-alt)", color: copyDates[fmtDate(d)] ? "var(--on-accent)" : "var(--ink)", opacity: d.toDateString() === selectedDate.toDateString() ? 0.35 : 1 }}>{d.getDate()}</button> : <span key={i} />)}</div><div className="flex gap-2 mt-4"><button onClick={() => setCopyOpen(false)} className="flex-1 rounded-full py-3 bg-[var(--surface-alt)] text-sm">Отмена</button><button onClick={applyCopy} disabled={!Object.values(copyDates).some(Boolean)} className="flex-1 rounded-full py-3 bg-[var(--moss)] text-sm" style={{ color: "var(--on-accent)", opacity: Object.values(copyDates).some(Boolean) ? 1 : 0.5 }}>Применить</button></div></div></>}
     <BottomNav />
   </div></div>;

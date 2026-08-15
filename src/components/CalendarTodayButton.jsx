@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 const CALENDAR_DATE_KEY = "zenflow-calendar-selected-date";
 
@@ -10,9 +11,14 @@ function todayKey() {
 }
 
 export default function CalendarTodayButton() {
+  const location = useLocation();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    if (location.pathname !== "/calendar") {
+      setVisible(false);
+      return;
+    }
     const sync = () => {
       const saved = localStorage.getItem(CALENDAR_DATE_KEY);
       setVisible(Boolean(saved && saved !== todayKey()));
@@ -24,9 +30,9 @@ export default function CalendarTodayButton() {
       window.clearInterval(timer);
       window.removeEventListener("focus", sync);
     };
-  }, []);
+  }, [location.pathname]);
 
-  if (!visible) return null;
+  if (location.pathname !== "/calendar" || !visible) return null;
 
   function goToday() {
     localStorage.setItem(CALENDAR_DATE_KEY, todayKey());

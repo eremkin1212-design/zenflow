@@ -32,9 +32,9 @@ const [repeatUnit,setRepeatUnit]=useState("none"),[repeatCount,setRepeatCount]=u
  const {user}=useAuth();
 useEffect(()=>{if(!user)return;let dead=false;getProfile(user.id).then(p=>{if(!dead)setHours(p?.working_hours||null)}).catch(()=>{});return()=>{dead=true}},[user]);
 const stripRef=useRef(null),stripReady=useRef(false);
-const [stripBase,setStripBase]=useState(()=>addDays(startOfWeek(new Date()),-84));
-const stripDates=useMemo(()=>Array.from({length:175},(_,i)=>addDays(stripBase,i)),[stripBase]);
-useEffect(()=>{const key=fmtDate(date);if(key<fmtDate(stripDates[0])||key>fmtDate(stripDates[stripDates.length-1])){setStripBase(addDays(startOfWeek(date),-84));return}const el=stripRef.current?.querySelector(`[data-d="${key}"]`);el?.scrollIntoView({inline:"center",block:"nearest",behavior:stripReady.current?"smooth":"auto"});if(el)stripReady.current=true},[date,stripDates]);
+const [stripBase,setStripBase]=useState(()=>addDays(startOfWeek(new Date()),-28));
+const stripDates=useMemo(()=>Array.from({length:240},(_,i)=>addDays(stripBase,i)),[stripBase]);
+useEffect(()=>{const key=fmtDate(date);if(key<fmtDate(stripDates[0])||key>fmtDate(stripDates[stripDates.length-1])){setStripBase(addDays(startOfWeek(date),-28));return}const el=stripRef.current?.querySelector(`[data-d="${key}"]`);el?.scrollIntoView({inline:"center",block:"nearest",behavior:stripReady.current?"smooth":"auto"});if(el)stripReady.current=true},[date,stripDates,loading]);
 function toggleService(s){setSelectedServices(prev=>prev.some(x=>x.id===s.id)?prev.filter(x=>x.id!==s.id):[...prev,{id:s.id,name:s.name,color:s.color,duration:s.duration,price:s.price}])}
  function changeWeek(n){setDate(d=>addDays(d,n*7))} function selectDay(i){setDate(week[i])}
  async function addQuick(){if(!quickName.trim())return;try{const c=await createClient({name:quickName,phone:quickPhone});setClients(x=>[...x,c]);setClient({id:c.id,name:c.name});setQuick(false);setQuickName("");setQuickPhone("")}catch{window.alert("Не удалось создать клиента")}}

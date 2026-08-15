@@ -13,9 +13,15 @@ function formatDate(value) {
   return new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
+function todayLocal() {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
 async function getAppointmentStats(clientIds) {
   if (!clientIds?.length) return {};
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const { data, error } = await supabase.from("appointments").select("id, client_id, date, price, status").in("client_id", clientIds).lte("date", today);
   if (error) throw error;
   const stats = {};
@@ -33,11 +39,21 @@ async function getAppointmentStats(clientIds) {
 
 async function getNextVisits(clientIds) {
   if (!clientIds?.length) return {};
-  const today = new Date().toISOString().slice(0, 10);
-  const { data, error } = await supabase.from("appointments").select("id, client_id, date, start_time, start, status").in("client_id", clientIds).gte("date", today).neq("status", "cancelled").order("date", { ascending: true });
+  const today = todayLocal();
+  // В appointments используется именно start_time. Старого поля start здесь нет.
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("id, client_id, date, start_time, status")
+    .in("client_id", clientIds)
+    .gte("date", today)
+    .neq("status", "cancelled")
+    .order("date", { ascending: true })
+    .order("start_time", { ascending: true });
   if (error) return {};
   const next = {};
-  for (const a of data || []) if (!next[a.client_id]) next[a.client_id] = { date: a.date, time: a.start_time || a.start || "" };
+  for (const a of data || []) {
+    if (!next[a.client_id]) next[a.client_id] = { date: a.date, time: a.start_time || "" };
+  }
   return next;
 }
 
@@ -123,7 +139,20 @@ export async function getHistory(clientId) {
 export async function getPayments(clientId) {
   const { data, error } = await supabase.from("client_payments").select("*").eq("client_id", clientId).order("id", { ascending: false });
   if (error) throw error;
-  return data || [];
+  const payments = data || [];
+  if (!payments.length) return [];
+
+  // Оплата будущей/непроведённой записи не считается уже оплаченной услугой.
+  // Если платёж привязан к записи, учитываем его только когда эта запись завершена.
+  const appointmentIds = [...new Set(payments.map((p) => p.appointment_id).filter(Boolean))];
+  if (!appointmentIds.length) return payments;
+  const { data: appointments, error: appointmentsError } = await supabase
+    .from("appointments")
+    .select("id, status, date")
+    .in("id", appointmentIds);
+  if (appointmentsError) return payments;
+  const validIds = new Set((appointments || []).filter((a) => a.status === "done").map((a) => a.id));
+  return payments.filter((p) => !p.appointment_id || validIds.has(p.appointment_id));
 }
 
 export async function getNotes(clientId) {

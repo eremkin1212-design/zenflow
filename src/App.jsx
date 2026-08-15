@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./theme";
 import { AuthProvider, useAuth } from "./auth";
 import Login from "./screens/Login";
@@ -12,7 +12,6 @@ import ClientForm from "./screens/ClientForm";
 import AppointmentForm from "./screens/AppointmentForm";
 import Finance from "./screens/Finance";
 import Settings from "./screens/Settings";
-import CalendarTodayButton from "./components/CalendarTodayButton";
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -26,21 +25,18 @@ function RequireAuth({ children }) {
 function Routed() {
   const { user, loading } = useAuth();
   return (
-    <>
-      <Routes>
-        <Route path="/login" element={!loading && user ? <Navigate to="/" replace /> : <Login />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-        <Route path="/calendar" element={<RequireAuth><Calendar /></RequireAuth>} />
-        <Route path="/clients" element={<RequireAuth><ClientsList /></RequireAuth>} />
-        <Route path="/clients/new" element={<RequireAuth><ClientForm /></RequireAuth>} />
-        <Route path="/clients/:id" element={<RequireAuth><ClientCard /></RequireAuth>} />
-        <Route path="/appointment/:mode" element={<RequireAuth><AppointmentForm /></RequireAuth>} />
-        <Route path="/finance" element={<RequireAuth><Finance /></RequireAuth>} />
-        <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
-      </Routes>
-      <CalendarTodayButton />
-    </>
+    <Routes>
+      <Route path="/login" element={!loading && user ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
+      <Route path="/calendar" element={<RequireAuth><Calendar /></RequireAuth>} />
+      <Route path="/clients" element={<RequireAuth><ClientsList /></RequireAuth>} />
+      <Route path="/clients/new" element={<RequireAuth><ClientForm /></RequireAuth>} />
+      <Route path="/clients/:id" element={<RequireAuth><ClientCard /></RequireAuth>} />
+      <Route path="/appointment/:mode" element={<RequireAuth><AppointmentForm /></RequireAuth>} />
+      <Route path="/finance" element={<RequireAuth><Finance /></RequireAuth>} />
+      <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+    </Routes>
   );
 }
 

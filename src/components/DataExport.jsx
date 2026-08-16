@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { Download, Check, AlertCircle } from "lucide-react";
-import { EXPORTS } from "../data/exports";
+import { EXPORTS, exportTable } from "../data/exports";
 
 export default function DataExport() {
 const [open, setOpen] = useState(false);
+const [format, setFormat] = useState("xls");
 const [busy, setBusy] = useState(null);
 const [note, setNote] = useState("");
 const [error, setError] = useState(false);
@@ -13,8 +14,8 @@ setBusy(item.key);
 setNote("");
 setError(false);
 try {
-const count = await item.run();
-setNote(`${item.label}: выгружено ${count} ${count === 1 ? "строка" : "строк"}`);
+const count = await exportTable(item.key, format);
+setNote(`${item.label}: ${count} ${count === 1 ? "строка" : "строк"}`);
 } catch {
 setError(true);
 setNote(`Не удалось выгрузить «${item.label}». Проверь подключение.`);
@@ -30,9 +31,9 @@ setError(false);
 try {
 let total = 0;
 for (const item of EXPORTS) {
-// небольшая пауза, иначе браузер блокирует пачку скачиваний
-total += await item.run();
-await new Promise((r) => setTimeout(r, 400));
+total += await exportTable(item.key, format);
+// пауза, иначе браузер блокирует пачку скачиваний
+await new Promise((r) => setTimeout(r, 500));
 }
 setNote(`Готово: ${EXPORTS.length} файла, ${total} строк`);
 } catch {
@@ -62,8 +63,25 @@ return (
 Выгрузка данных
 </div>
 <div className="text-xs mt-1 leading-relaxed text-[var(--ink-soft)]">
-Таблицы CSV — открываются в Excel и Numbers. Пригодится как резервная копия
-или чтобы посчитать что-то своё.
+Резервная копия или основа для своих расчётов.
+</div>
+
+<div className="flex rounded-full p-1 mt-3 bg-[var(--surface-alt)]">
+{[["xls", "Для Excel"], ["csv", "CSV"]].map(([key, label]) => (
+<button
+key={key}
+onClick={() => setFormat(key)}
+className="flex-1 rounded-full py-1.5 text-xs font-medium"
+style={{ background: format === key ? "var(--moss)" : "transparent", color: format === key ? "var(--on-accent)" : "var(--ink-soft)" }}
+>
+{label}
+</button>
+))}
+</div>
+<div className="text-[11px] mt-1.5 text-[var(--ink-soft)]">
+{format === "xls"
+? "Открывается двойным щелчком, буквы не ломаются."
+: "Для загрузки в другие программы. В Excel может потребоваться выбрать кодировку UTF-8."}
 </div>
 
 <button

@@ -4,7 +4,7 @@ export function fmtDate(d) {
 const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const day = String(d.getDate()).padStart(2, "0");
 return `${y}-${m}-${day}`;
 }
-const SELECT = "*, clients(id,name,phone,color), services(id,name,color,duration,price), appointment_services(services(name))";
+const SELECT = "*, clients(id,name,phone,color,highlights), services(id,name,color,duration,price), appointment_services(services(name))";
 export async function getAppointmentsRange(startDate,endDate){const {data,error}=await supabase.from("appointments").select(SELECT).gte("date",fmtDate(startDate)).lte("date",fmtDate(endDate)).order("date").order("start_time");if(error)throw error;return data;}
 export async function getAppointmentById(id){const {data,error}=await supabase.from("appointments").select(SELECT).eq("id",id).maybeSingle();if(error)throw error;return data;}
 export async function getAppointmentServices(appointmentId){const {data,error}=await supabase.from("appointment_services").select("id,appointment_id,service_id,duration,price,services(id,name,color,duration,price)").eq("appointment_id",appointmentId).order("id");if(error)throw error;return data||[];}

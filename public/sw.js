@@ -1,8 +1,8 @@
-// ZenFlow service worker.
+// RITENA service worker.
 // Отвечает за две вещи: приложение открывается с домашнего экрана
 // и принимает пуш-уведомления, когда приложение закрыто.
 
-const VERSION = "zenflow-v1";
+const VERSION = "ritena-v1";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -47,9 +47,9 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data ? event.data.json() : {};
   } catch {
-    payload = { title: "ZenFlow", body: event.data ? event.data.text() : "" };
+    payload = { title: "RITENA", body: event.data ? event.data.text() : "" };
   }
-  const title = payload.title || "ZenFlow";
+  const title = payload.title || "RITENA";
   const options = {
     body: payload.body || "",
     icon: "/icon-192.png",

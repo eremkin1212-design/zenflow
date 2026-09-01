@@ -14,8 +14,8 @@ on:
 
 jobs:
   native-shell:
-    runs-on: macos-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout

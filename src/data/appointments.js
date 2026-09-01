@@ -8,24 +8,29 @@ const SELECT = "*, clients(id,name,phone,color,highlights), services(id,name,col
 export async function getAppointmentsRange(startDate,endDate){const {data,error}=await supabase.from("appointments").select(SELECT).gte("date",fmtDate(startDate)).lte("date",fmtDate(endDate)).order("date").order("start_time");if(error)throw error;return data;}
 export async function getAppointmentById(id){const {data,error}=await supabase.from("appointments").select(SELECT).eq("id",id).maybeSingle();if(error)throw error;return data;}
 export async function getAppointmentServices(appointmentId){const {data,error}=await supabase.from("appointment_services").select("id,appointment_id,service_id,duration,price,services(id,name,color,duration,price)").eq("appointment_id",appointmentId).order("id");if(error)throw error;return data||[];}
-export async function getAppointmentPayment(appointmentId){const {data,error}=await supabase.from("client_payments").select("id,amount,method,date").eq("appointment_id",appointmentId).order("id",{ascending:false}).limit(1).maybeSingle();if(error)throw error;return data;}
-export async function updateAppointmentPayment(paymentId,amount){const {data,error}=await supabase.from("client_payments").update({amount}).eq("id",paymentId).select().single();if(error)throw error;return data;}
-export async function createAppointment(payload){const {data,error}=await supabase.from("appointments").insert(payload).select(SELECT).single();if(error)throw error;return data;}
+export async function getAppointmentPayment(appointmentId){const {data,error}=await supabase.from("client_payments").select("id,amount,method,date,discount_percent").eq("appointment_id",appointmentId).order("id",{ascending:false}).limit(1).maybeSingle();if(error)throw error;return data;}
+
+// Оплата уже завершённой записи не должна меняться просто из-за редактирования
+// даты, времени или состава услуг. Возвращаем существующий платёж без перезаписи суммы.
+export async function updateAppointmentPayment(paymentId){const {data,error}=await supabase.from("client_payments").select("*").eq("id",paymentId).single();if(error)throw error;return data;}
+
+export async function createAppointment(payload){const normalized={...payload,full_price:Number(payload.full_price ?? payload.price ?? 0)};const {data,error}=await supabase.from("appointments").insert(normalized).select(SELECT).single();if(error)throw error;return data;}
 export async function updateAppointment(id,fields){const {data,error}=await supabase.from("appointments").update(fields).eq("id",id).select(SELECT).single();if(error)throw error;return data;}
 export async function saveAppointmentServices(appointmentId,services){const {error:delError}=await supabase.from("appointment_services").delete().eq("appointment_id",appointmentId);if(delError)throw delError;if(!services?.length)return[];const rows=services.map(s=>({appointment_id:appointmentId,service_id:s.id??s.service_id,duration:Number(s.duration)||0,price:Number(s.price)||0}));const {data,error}=await supabase.from("appointment_services").insert(rows).select();if(error)throw error;return data||[];}
 
 export async function completeAppointment(appointment,method,amount,discount){
-// amount — сколько реально заплатили, discount — скидка в процентах.
-const __full=Number(appointment.price)||0;
+// price = фактически полученная сумма после завершения записи.
+// full_price = полная стоимость услуг до скидки/ручного изменения оплаты.
+const __full=Number(appointment.full_price ?? appointment.price)||0;
 const __paid=Number.isFinite(Number(amount))&&Number(amount)>=0?Math.round(Number(amount)):__full;
   if(!appointment) throw new Error("Запись не найдена");
-  const updated=await updateAppointment(appointment.id,{status:"done",price:__paid});
+  const updated=await updateAppointment(appointment.id,{status:"done",price:__paid,full_price:__full});
   const clientId=appointment.client_id??appointment.clients?.id;
   if(clientId){
     // Идемпотентность: повторное завершение/двойной клик не создаёт второй платёж.
     const { data: existing, error: lookupError } = await supabase
       .from("client_payments")
-      .select("id,amount,method,date")
+      .select("id,amount,method,date,discount_percent")
       .eq("appointment_id",appointment.id)
       .limit(1)
       .maybeSingle();

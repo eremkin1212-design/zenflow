@@ -38,6 +38,44 @@ jobs:
       - name: Create Android shell
         run: npx cap add android
 
+      - name: Prepare RITENA brand assets
+        run: |
+          mkdir -p assets
+          node --input-type=module <<'NODE'
+          import sharp from 'sharp';
+          import { copyFile } from 'node:fs/promises';
+
+          await sharp('public/icon-512.png')
+            .resize(1024, 1024, { fit: 'fill' })
+            .png()
+            .toFile('assets/icon-only.png');
+
+          const splashLogo = await sharp('public/icon-512.png')
+            .resize(900, 900, { fit: 'contain' })
+            .png()
+            .toBuffer();
+
+          await sharp({
+            create: {
+              width: 2732,
+              height: 2732,
+              channels: 4,
+              background: '#1A3026'
+            }
+          })
+            .composite([{ input: splashLogo, gravity: 'center' }])
+            .png()
+            .toFile('assets/splash.png');
+
+          await copyFile('assets/splash.png', 'assets/splash-dark.png');
+          NODE
+
+      - name: Generate iOS icon and splash
+        run: npx capacitor-assets generate --ios
+
+      - name: Generate Android icon and splash
+        run: npx capacitor-assets generate --android
+
       - name: Sync Capacitor
         run: npx cap sync
 

@@ -19,6 +19,10 @@
   --now: #c6584a;
   --on-accent: #fbf9f3;
   --danger: #b15c4c;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 .dark {
@@ -39,9 +43,35 @@
 }
 
 html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html,
 body {
   margin: 0;
   background: var(--paper);
+  overscroll-behavior-y: none;
+}
+
+body {
+  min-height: 100dvh;
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
 }
 
 .zf-bottom-nav {
@@ -50,11 +80,14 @@ body {
   isolation: isolate;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+  padding-bottom: max(12px, var(--safe-bottom)) !important;
+  padding-left: max(24px, var(--safe-left)) !important;
+  padding-right: max(24px, var(--safe-right)) !important;
 }
 
 /* Keep the selected calendar appointment sheet fully above the bottom nav. */
 .fixed.left-0.right-0.bottom-0.max-w-sm.z-30 {
-  bottom: 84px !important;
+  bottom: calc(84px + var(--safe-bottom)) !important;
 }
 
 @keyframes zf-pulse {

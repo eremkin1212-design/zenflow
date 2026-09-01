@@ -26,7 +26,7 @@ export default function ResetPassword() {
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-3xl font-serif" style={{ fontWeight: 500 }}>ZenFlow</div>
+          <div className="text-3xl font-serif" style={{ fontWeight: 500 }}>RITENA</div>
           <div className="text-sm mt-1 text-[var(--ink-soft)]">Новый пароль</div>
         </div>
 

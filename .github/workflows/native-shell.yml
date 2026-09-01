@@ -1,0 +1,56 @@
+name: Native shell
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'capacitor.config.ts'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - '.github/workflows/native-shell.yml'
+
+jobs:
+  native-shell:
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Create iOS shell
+        run: npx cap add ios
+
+      - name: Create Android shell
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync
+
+      - name: Upload iOS project
+        uses: actions/upload-artifact@v4
+        with:
+          name: ritena-ios
+          path: ios/
+          retention-days: 14
+
+      - name: Upload Android project
+        uses: actions/upload-artifact@v4
+        with:
+          name: ritena-android
+          path: android/
+          retention-days: 14

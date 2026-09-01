@@ -1,0 +1,97 @@
+name: iOS compile validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'capacitor.config.ts'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - '.github/workflows/ios-validate.yml'
+
+jobs:
+  ios-compile:
+    runs-on: macos-15
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Create iOS project
+        run: npx cap add ios
+
+      - name: Prepare RITENA brand assets
+        run: |
+          mkdir -p assets
+          node --input-type=module <<'NODE'
+          import sharp from 'sharp';
+          import { copyFile } from 'node:fs/promises';
+
+          await sharp('public/icon-512.png')
+            .resize(1024, 1024, { fit: 'fill' })
+            .png()
+            .toFile('assets/icon-only.png');
+
+          const splashLogo = await sharp('public/icon-512.png')
+            .resize(900, 900, { fit: 'contain' })
+            .png()
+            .toBuffer();
+
+          await sharp({
+            create: {
+              width: 2732,
+              height: 2732,
+              channels: 4,
+              background: '#1A3026'
+            }
+          })
+            .composite([{ input: splashLogo, gravity: 'center' }])
+            .png()
+            .toFile('assets/splash.png');
+
+          await copyFile('assets/splash.png', 'assets/splash-dark.png');
+          NODE
+
+      - name: Generate iOS assets
+        run: npx capacitor-assets generate --ios
+
+      - name: Sync Capacitor
+        run: npx cap sync ios
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve Swift packages
+        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -resolvePackageDependencies
+
+      - name: Compile iOS Simulator build
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Upload validated iOS project
+        uses: actions/upload-artifact@v4
+        with:
+          name: ritena-ios-validated
+          path: ios/
+          retention-days: 14

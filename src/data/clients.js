@@ -40,13 +40,12 @@ async function getAppointmentStats(clientIds) {
 async function getNextVisits(clientIds) {
   if (!clientIds?.length) return {};
   const today = todayLocal();
-  // В appointments используется именно start_time. Старого поля start здесь нет.
   const { data, error } = await supabase
     .from("appointments")
     .select("id, client_id, date, start_time, status")
     .in("client_id", clientIds)
     .gte("date", today)
-    .neq("status", "cancelled")
+    .eq("status", "planned")
     .order("date", { ascending: true })
     .order("start_time", { ascending: true });
   if (error) return {};
@@ -88,7 +87,8 @@ export async function getClientById(id) {
 }
 
 export async function getHistory(clientId) {
-  const { data, error } = await supabase.from("appointments").select("id, date, price, status, services(name, color)").eq("client_id", clientId).neq("status", "cancelled").order("date", { ascending: false });
+  // История = только реально завершённые визиты. Будущие записи сюда не попадают.
+  const { data, error } = await supabase.from("appointments").select("id, date, price, status, services(name, color)").eq("client_id", clientId).eq("status", "done").order("date", { ascending: false });
   if (error) throw error;
 
   const appointments = data || [];

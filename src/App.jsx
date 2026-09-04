@@ -12,6 +12,7 @@ import ClientForm from "./screens/ClientForm";
 import AppointmentForm from "./screens/AppointmentForm";
 import Finance from "./screens/Finance";
 import Settings from "./screens/Settings";
+import Support from "./screens/Support";
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -36,6 +37,7 @@ function Routed() {
       <Route path="/appointment/:mode" element={<RequireAuth><AppointmentForm /></RequireAuth>} />
       <Route path="/finance" element={<RequireAuth><Finance /></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+      <Route path="/support" element={<RequireAuth><Support /></RequireAuth>} />
     </Routes>
   );
 }

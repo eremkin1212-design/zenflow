@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, Inbox, Clock3, CheckCircle2, CircleDot, ChevronRight } from "lucide-react";
+import { ChevronLeft, Inbox, Clock3, CheckCircle2, CircleDot, ChevronRight, MessageCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import BottomNav from "../components/BottomNav";
 import { useAuth } from "../auth";
-import { getAllSupportRequests, isSupportAgent, subscribeSupportInbox } from "../data/support";
+import { connectSupportTelegram, getAllSupportRequests, getSupportTelegramStatus, isSupportAgent, subscribeSupportInbox } from "../data/support";
 
 const STATUS = {
   new: { label: "Новое", Icon: CircleDot },
@@ -18,6 +18,10 @@ export default function SupportAdmin() {
   const [requests, setRequests] = useState([]);
   const [filter, setFilter] = useState("open");
   const [loading, setLoading] = useState(true);
+  const [telegramStatus, setTelegramStatus] = useState({ connected: false });
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramBusy, setTelegramBusy] = useState(false);
+  const [telegramInfo, setTelegramInfo] = useState("");
 
   async function load() {
     try {
@@ -29,13 +33,21 @@ export default function SupportAdmin() {
     }
   }
 
+  async function loadTelegramStatus() {
+    try {
+      setTelegramStatus(await getSupportTelegramStatus());
+    } catch {
+      setTelegramStatus({ connected: false });
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     async function boot() {
       const agent = await isSupportAgent(user?.id);
       if (cancelled) return;
       setAllowed(agent);
-      if (agent) await load();
+      if (agent) await Promise.all([load(), loadTelegramStatus()]);
       else setLoading(false);
     }
     void boot();
@@ -55,6 +67,28 @@ export default function SupportAdmin() {
 
   const openCount = requests.filter((r) => r.status !== "resolved").length;
 
+  async function handleTelegramConnect() {
+    if (!telegramToken.trim() || telegramBusy) return;
+    setTelegramBusy(true);
+    setTelegramInfo("");
+    try {
+      const result = await connectSupportTelegram(telegramToken);
+      if (result?.connected) {
+        setTelegramStatus({ connected: true });
+        setTelegramToken("");
+        setTelegramInfo("Готово. Тестовое сообщение отправлено в Telegram.");
+      } else if (result?.needs_start) {
+        setTelegramInfo(`Бот найден${result.bot_username ? `: @${result.bot_username}` : ""}. Открой его в Telegram, нажми Start или отправь /start, затем нажми «Подключить» ещё раз.`);
+      } else {
+        setTelegramInfo(result?.message || "Не удалось подключить Telegram.");
+      }
+    } catch (error) {
+      setTelegramInfo(error?.message || "Не удалось подключить Telegram.");
+    } finally {
+      setTelegramBusy(false);
+    }
+  }
+
   if (allowed === null || loading) {
     return <div className="min-h-screen bg-[var(--paper)] flex items-center justify-center text-sm text-[var(--ink-soft)]">Загрузка…</div>;
   }
@@ -73,6 +107,35 @@ export default function SupportAdmin() {
             <div className="text-xs mt-0.5 text-[var(--ink-soft)]">{openCount ? `Открытых обращений: ${openCount}` : "Новых обращений нет"}</div>
           </div>
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}><Inbox size={19} /></div>
+        </div>
+
+        <div className="mx-5 mb-4 rounded-2xl p-4 bg-[var(--surface)] border border-[var(--line)]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: telegramStatus.connected ? "var(--moss-soft)" : "var(--surface-alt)", color: "var(--moss)" }}><MessageCircle size={17} /></div>
+            <div className="flex-1">
+              <div className="text-sm font-medium">Telegram</div>
+              <div className="text-xs text-[var(--ink-soft)]">{telegramStatus.connected ? "Подключён · новые обращения придут в Telegram" : "Уведомления поддержки пока не подключены"}</div>
+            </div>
+            {telegramStatus.connected && <CheckCircle2 size={17} className="text-[var(--moss)]" />}
+          </div>
+
+          {!telegramStatus.connected && (
+            <div className="mt-3">
+              <div className="text-xs leading-5 text-[var(--ink-soft)]">1. Создай бота через @BotFather. 2. Открой нового бота и нажми Start. 3. Вставь сюда токен из BotFather.</div>
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="password"
+                  value={telegramToken}
+                  onChange={(e) => setTelegramToken(e.target.value)}
+                  placeholder="Токен Telegram-бота"
+                  autoComplete="off"
+                  className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-sm bg-[var(--surface-alt)] border border-[var(--line)] outline-none"
+                />
+                <button onClick={handleTelegramConnect} disabled={!telegramToken.trim() || telegramBusy} className="rounded-xl px-3 py-2.5 text-xs font-medium bg-[var(--moss)] text-[var(--on-accent)]" style={{ opacity: !telegramToken.trim() || telegramBusy ? 0.5 : 1 }}>{telegramBusy ? "…" : "Подключить"}</button>
+              </div>
+              {telegramInfo && <div className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">{telegramInfo}</div>}
+            </div>
+          )}
         </div>
 
         <div className="mx-5 flex rounded-full p-1 bg-[var(--surface-alt)] border border-[var(--line)]">

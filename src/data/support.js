@@ -117,6 +117,22 @@ export async function updateSupportStatus(requestId, status) {
   return data;
 }
 
+export async function getSupportTelegramStatus() {
+  const { data, error } = await supabase.functions.invoke("configure-support-telegram", {
+    body: { action: "status" },
+  });
+  if (error) throw error;
+  return data || { connected: false };
+}
+
+export async function connectSupportTelegram(token) {
+  const { data, error } = await supabase.functions.invoke("configure-support-telegram", {
+    body: { action: "connect", token: token.trim() },
+  });
+  if (error) throw error;
+  return data;
+}
+
 export function subscribeSupportConversation(requestId, { onMessage, onRequest } = {}) {
   const channel = supabase
     .channel(`support-conversation-${requestId}`)

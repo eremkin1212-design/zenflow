@@ -2,21 +2,13 @@ import { supabase } from "../lib/supabaseClient";
 
 const REQUEST_FIELDS = "id, owner_id, requester_email, topic, message, status, created_at, updated_at, last_message_at";
 
-async function notifySupportTelegram(event, requestId) {
+async function notifySupportTelegram(requestId, messageId = null) {
   try {
-    const { data } = await supabase.auth.getSession();
-    const accessToken = data?.session?.access_token;
-    if (!accessToken) return;
+    const body = { requestId };
+    if (messageId) body.messageId = messageId;
 
-    const baseUrl = import.meta.env.VITE_SUPPORT_API_URL || "";
-    await fetch(`${baseUrl}/api/support-telegram`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ event, requestId }),
-    });
+    const { error } = await supabase.functions.invoke("notify-support-telegram", { body });
+    if (error) throw error;
   } catch (error) {
     console.warn("Telegram support notification was not delivered", error);
   }
@@ -41,7 +33,7 @@ export async function createSupportRequest({ ownerId, email, topic, message }) {
     .single();
 
   if (error) throw error;
-  void notifySupportTelegram("new_request", data.id);
+  void notifySupportTelegram(data.id);
   return data;
 }
 
@@ -75,7 +67,7 @@ export async function sendCustomerReply({ requestId, userId, message }) {
     .single();
 
   if (error) throw error;
-  void notifySupportTelegram("customer_reply", requestId);
+  void notifySupportTelegram(requestId, data.id);
   return data;
 }
 

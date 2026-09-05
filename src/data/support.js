@@ -77,6 +77,15 @@ export async function sendCustomerReply({ requestId, userId, message }) {
   return data;
 }
 
+export async function resolveOwnSupportRequest(requestId) {
+  const { data, error } = await supabase.functions.invoke("resolve-support-request", {
+    body: { requestId },
+  });
+  if (error) throw error;
+  if (!data?.request) throw new Error("Не удалось завершить обращение");
+  return data.request;
+}
+
 export async function isSupportAgent(userId) {
   if (!userId) return false;
   const { data, error } = await supabase

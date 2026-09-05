@@ -15,9 +15,15 @@ async function notifySupportTelegram(requestId, messageId = null) {
 }
 
 export async function getSupportRequests() {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  const ownerId = authData?.user?.id;
+  if (!ownerId) return [];
+
   const { data, error } = await supabase
     .from("support_requests")
     .select(REQUEST_FIELDS)
+    .eq("owner_id", ownerId)
     .order("last_message_at", { ascending: false })
     .limit(30);
 

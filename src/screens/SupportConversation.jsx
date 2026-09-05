@@ -86,13 +86,17 @@ export default function SupportConversation() {
 
   async function handleSend(e) {
     e.preventDefault();
-    if (!user || !draft.trim() || sending || (!adminMode && request?.status === "resolved")) return;
+    if (!user || !draft.trim() || sending) return;
+    const reopening = !adminMode && request?.status === "resolved";
     setSending(true);
     try {
       const created = adminMode
         ? await sendSupportReply({ requestId, userId: user.id, message: draft })
         : await sendCustomerReply({ requestId, userId: user.id, message: draft });
       setMessages((prev) => prev.some((m) => m.id === created.id) ? prev : [...prev, created]);
+      if (reopening) {
+        setRequest((prev) => prev ? { ...prev, status: "in_progress", updated_at: new Date().toISOString() } : prev);
+      }
       setDraft("");
     } catch {
       window.alert("Не удалось отправить сообщение. Проверь подключение и попробуй снова.");
@@ -186,7 +190,7 @@ export default function SupportConversation() {
           {showResolutionPrompt && (
             <div className="rounded-2xl p-4 bg-[var(--surface)] border border-[var(--line)]">
               <div className="flex items-center gap-2 text-sm font-medium"><CheckCircle2 size={17} className="text-[var(--moss)]" />Вопрос решён?</div>
-              <div className="text-xs mt-1.5 leading-5 text-[var(--ink-soft)]">Если всё получилось, обращение автоматически завершится. Если нет — поддержка продолжит помогать.</div>
+              <div className="text-xs mt-1.5 leading-5 text-[var(--ink-soft)]">Если всё получилось, нажми «Да». Если ничего не выбрать и не ответить, обращение автоматически перейдёт в «Решено» примерно через 10 минут после ответа поддержки.</div>
               <div className="flex gap-2 mt-3">
                 <button type="button" disabled={resolutionBusy} onClick={() => handleResolution(true)} className="flex-1 rounded-full py-2.5 text-xs font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: resolutionBusy ? 0.55 : 1 }}>Да, всё решено</button>
                 <button type="button" disabled={resolutionBusy} onClick={() => handleResolution(false)} className="flex-1 rounded-full py-2.5 text-xs font-medium border border-[var(--line)] bg-[var(--surface-alt)] text-[var(--ink)]" style={{ opacity: resolutionBusy ? 0.55 : 1 }}>Нет</button>
@@ -197,21 +201,19 @@ export default function SupportConversation() {
           {!adminMode && request.status === "resolved" && (
             <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>
               <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
-              <div><div className="text-sm font-medium">Обращение завершено</div><div className="text-xs mt-1 leading-5 opacity-80">Если появится новый вопрос, создай новое обращение в поддержку.</div></div>
+              <div><div className="text-sm font-medium">Обращение завершено</div><div className="text-xs mt-1 leading-5 opacity-80">Если нужно продолжить этот вопрос, просто напиши сообщение ниже — обращение автоматически вернётся в работу.</div></div>
             </div>
           )}
 
           <div ref={endRef} />
         </div>
 
-        {(adminMode || request.status !== "resolved") && (
-          <form onSubmit={handleSend} className="fixed left-0 right-0 bottom-[72px] z-30 max-w-sm mx-auto px-4 py-3 bg-[var(--paper)]/95 backdrop-blur border-t border-[var(--line)]">
-            <div className="flex items-end gap-2 rounded-2xl p-2 bg-[var(--surface)] border border-[var(--line)]">
-              <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1} maxLength={4000} placeholder={adminMode ? "Ответить пользователю…" : "Ответить поддержке…"} className="flex-1 max-h-28 resize-none bg-transparent outline-none text-sm px-2 py-2" />
-              <button type="submit" disabled={!draft.trim() || sending} className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: !draft.trim() || sending ? 0.45 : 1 }} aria-label="Отправить"><Send size={16} /></button>
-            </div>
-          </form>
-        )}
+        <form onSubmit={handleSend} className="fixed left-0 right-0 bottom-[72px] z-30 max-w-sm mx-auto px-4 py-3 bg-[var(--paper)]/95 backdrop-blur border-t border-[var(--line)]">
+          <div className="flex items-end gap-2 rounded-2xl p-2 bg-[var(--surface)] border border-[var(--line)]">
+            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1} maxLength={4000} placeholder={adminMode ? "Ответить пользователю…" : request.status === "resolved" ? "Продолжить диалог…" : "Ответить поддержке…"} className="flex-1 max-h-28 resize-none bg-transparent outline-none text-sm px-2 py-2" />
+            <button type="submit" disabled={!draft.trim() || sending} className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: !draft.trim() || sending ? 0.45 : 1 }} aria-label="Отправить"><Send size={16} /></button>
+          </div>
+        </form>
 
         <BottomNav />
       </div>

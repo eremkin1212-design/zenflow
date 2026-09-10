@@ -21,8 +21,8 @@ setOk(false);
 
 async function save() {
 setNote("");
-if (password.length < 6) {
-setNote("Пароль должен быть не короче 6 символов");
+if (password.length < 10) {
+setNote("Пароль должен быть не короче 10 символов");
 setOk(false);
 return;
 }
@@ -78,6 +78,7 @@ value={password}
 onChange={(e) => setPassword(e.target.value)}
 placeholder="Новый пароль"
 autoComplete="new-password"
+minLength={10}
 className="w-full rounded-xl p-2.5 pr-10 text-sm bg-[var(--surface-alt)] outline-none"
 />
 <button
@@ -89,12 +90,15 @@ className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5"
 </button>
 </div>
 
+<div className="text-xs mt-2 text-[var(--ink-soft)]">Минимум 10 символов.</div>
+
 <input
 type={show ? "text" : "password"}
 value={repeat}
 onChange={(e) => setRepeat(e.target.value)}
 placeholder="Повтори пароль"
 autoComplete="new-password"
+minLength={10}
 className="w-full mt-2 rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none"
 />
 

@@ -128,10 +128,14 @@ revoke all on table public.notification_log from anon, authenticated;
 revoke all privileges on all tables in schema public from anon;
 revoke all privileges on all sequences in schema public from anon;
 
--- 4) Avatar object metadata is writable only in /<auth.uid()>/...
+-- 4) Avatar object metadata is writable only in /<auth.uid()>/avatar.<image-ext>.
 drop policy if exists "authenticated users can upload avatars" on storage.objects;
 drop policy if exists "authenticated users can update avatars" on storage.objects;
 drop policy if exists "avatar images are publicly accessible" on storage.objects;
+drop policy if exists "users can read own avatar metadata" on storage.objects;
+drop policy if exists "users can upload own avatars" on storage.objects;
+drop policy if exists "users can update own avatars" on storage.objects;
+drop policy if exists "users can delete own avatars" on storage.objects;
 
 create policy "users can read own avatar metadata"
 on storage.objects
@@ -140,6 +144,7 @@ to authenticated
 using (
   bucket_id = 'avatars'
   and (storage.foldername(name))[1] = (select auth.uid())::text
+  and lower(storage.filename(name)) in ('avatar.jpg','avatar.jpeg','avatar.png','avatar.webp','avatar.heic','avatar.heif')
 );
 
 create policy "users can upload own avatars"
@@ -149,6 +154,7 @@ to authenticated
 with check (
   bucket_id = 'avatars'
   and (storage.foldername(name))[1] = (select auth.uid())::text
+  and lower(storage.filename(name)) in ('avatar.jpg','avatar.jpeg','avatar.png','avatar.webp','avatar.heic','avatar.heif')
 );
 
 create policy "users can update own avatars"
@@ -158,10 +164,12 @@ to authenticated
 using (
   bucket_id = 'avatars'
   and (storage.foldername(name))[1] = (select auth.uid())::text
+  and lower(storage.filename(name)) in ('avatar.jpg','avatar.jpeg','avatar.png','avatar.webp','avatar.heic','avatar.heif')
 )
 with check (
   bucket_id = 'avatars'
   and (storage.foldername(name))[1] = (select auth.uid())::text
+  and lower(storage.filename(name)) in ('avatar.jpg','avatar.jpeg','avatar.png','avatar.webp','avatar.heic','avatar.heif')
 );
 
 create policy "users can delete own avatars"
@@ -171,4 +179,5 @@ to authenticated
 using (
   bucket_id = 'avatars'
   and (storage.foldername(name))[1] = (select auth.uid())::text
+  and lower(storage.filename(name)) in ('avatar.jpg','avatar.jpeg','avatar.png','avatar.webp','avatar.heic','avatar.heif')
 );

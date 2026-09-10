@@ -1,3 +1,17 @@
 node_modules
 dist
 .DS_Store
+.vercel
+
+# Local environment and secret files
+.env
+.env.*
+!.env.example
+
+# Signing/private-key material
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+*.key
+*.pem

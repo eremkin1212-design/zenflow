@@ -5,6 +5,22 @@ const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); 
 return `${y}-${m}-${day}`;
 }
 const SELECT = "*, clients(id,name,phone,color,highlights), services(id,name,color,duration,price), appointment_services(services(name))";
+
+function isExpiredAuthError(error,status){
+const code=String(error?.code||"");
+const message=String(error?.message||"").toLowerCase();
+return Number(status)===401||code==="PGRST301"||message.includes("jwt expired")||message.includes("invalid jwt")||message.includes("token is expired");
+}
+
+async function runWriteWithAuthRetry(operation){
+let result=await operation();
+if(result?.error&&isExpiredAuthError(result.error,result.status)){
+const {error:refreshError}=await supabase.auth.refreshSession();
+if(!refreshError) result=await operation();
+}
+return result;
+}
+
 export async function getAppointmentsRange(startDate,endDate){const {data,error}=await supabase.from("appointments").select(SELECT).gte("date",fmtDate(startDate)).lte("date",fmtDate(endDate)).order("date").order("start_time");if(error)throw error;return data;}
 export async function getAppointmentById(id){const {data,error}=await supabase.from("appointments").select(SELECT).eq("id",id).maybeSingle();if(error)throw error;return data;}
 export async function getAppointmentServices(appointmentId){const {data,error}=await supabase.from("appointment_services").select("id,appointment_id,service_id,duration,price,services(id,name,color,duration,price)").eq("appointment_id",appointmentId).order("id");if(error)throw error;return data||[];}
@@ -14,8 +30,8 @@ export async function getAppointmentPayment(appointmentId){const {data,error}=aw
 // даты, времени или состава услуг. Возвращаем существующий платёж без перезаписи суммы.
 export async function updateAppointmentPayment(paymentId){const {data,error}=await supabase.from("client_payments").select("*").eq("id",paymentId).single();if(error)throw error;return data;}
 
-export async function createAppointment(payload){const normalized={...payload,full_price:Number(payload.full_price ?? payload.price ?? 0)};const {data,error}=await supabase.from("appointments").insert(normalized).select(SELECT).single();if(error)throw error;return data;}
-export async function updateAppointment(id,fields){const {data,error}=await supabase.from("appointments").update(fields).eq("id",id).select(SELECT).single();if(error)throw error;return data;}
+export async function createAppointment(payload){const normalized={...payload,full_price:Number(payload.full_price ?? payload.price ?? 0)};const {data,error}=await runWriteWithAuthRetry(()=>supabase.from("appointments").insert(normalized).select(SELECT).single());if(error)throw error;return data;}
+export async function updateAppointment(id,fields){const {data,error}=await runWriteWithAuthRetry(()=>supabase.from("appointments").update(fields).eq("id",id).select(SELECT).single());if(error)throw error;return data;}
 export async function saveAppointmentServices(appointmentId,services){const {error:delError}=await supabase.from("appointment_services").delete().eq("appointment_id",appointmentId);if(delError)throw delError;if(!services?.length)return[];const rows=services.map(s=>({appointment_id:appointmentId,service_id:s.id??s.service_id,duration:Number(s.duration)||0,price:Number(s.price)||0}));const {data,error}=await supabase.from("appointment_services").insert(rows).select();if(error)throw error;return data||[];}
 
 export async function completeAppointment(appointment,method,amount,discount){

@@ -13,6 +13,7 @@ export default function ResetPassword() {
     setLoading(true);
     setError("");
     try {
+      if (password.length < 10) throw new Error("Пароль должен быть не короче 10 символов");
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       navigate("/");
@@ -33,9 +34,10 @@ export default function ResetPassword() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input
             type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-            placeholder="Новый пароль" autoComplete="new-password" minLength={6}
+            placeholder="Новый пароль" autoComplete="new-password" minLength={10}
             className="w-full rounded-2xl p-3.5 text-sm bg-[var(--surface)] border border-[var(--line)] outline-none"
           />
+          <div className="text-xs text-[var(--ink-soft)]">Минимум 10 символов.</div>
           {error && <div className="text-sm text-[var(--danger)]">{error}</div>}
           <button type="submit" disabled={loading} className="w-full rounded-full py-3.5 text-sm font-medium mt-1"
             style={{ background: "var(--clay)", color: "#FBF9F3", opacity: loading ? 0.6 : 1 }}>

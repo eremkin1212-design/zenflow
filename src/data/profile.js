@@ -67,10 +67,27 @@ export async function updateProfile(userId, fields) {
   return data;
 }
 
+const AVATAR_TYPES = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/heic", "heic"],
+  ["image/heif", "heif"],
+]);
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+
 export async function uploadAvatar(userId, file) {
-  const ext = file.name.split(".").pop() || "jpg";
+  if (!userId) throw new Error("Не удалось определить пользователя");
+  if (!file) throw new Error("Выберите изображение");
+  const ext = AVATAR_TYPES.get(String(file.type || "").toLowerCase());
+  if (!ext) throw new Error("Поддерживаются JPG, PNG, WEBP, HEIC и HEIF");
+  if (Number(file.size || 0) > MAX_AVATAR_BYTES) throw new Error("Размер фото должен быть не больше 5 МБ");
+
   const path = `${userId}/avatar.${ext}`;
-  const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+  const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
+    upsert: true,
+    contentType: file.type,
+  });
   if (uploadError) throw uploadError;
   const { data } = supabase.storage.from("avatars").getPublicUrl(path);
   return `${data.publicUrl}?t=${Date.now()}`;

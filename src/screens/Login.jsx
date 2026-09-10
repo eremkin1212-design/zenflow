@@ -16,6 +16,7 @@ export default function Login() {
     setInfo("");
     try {
       if (mode === "signup") {
+        if (password.length < 10) throw new Error("Пароль должен быть не короче 10 символов");
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         setInfo("Готово! Входим…");
@@ -69,12 +70,17 @@ export default function Login() {
           />
 
           {mode !== "forgot" && (
-            <input
-              type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="Пароль" autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              minLength={6}
-              className="w-full rounded-2xl p-3.5 text-sm bg-[var(--surface)] border border-[var(--line)] outline-none"
-            />
+            <>
+              <input
+                type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
+                placeholder="Пароль" autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                minLength={mode === "signup" ? 10 : 6}
+                className="w-full rounded-2xl p-3.5 text-sm bg-[var(--surface)] border border-[var(--line)] outline-none"
+              />
+              {mode === "signup" && (
+                <div className="text-xs text-[var(--ink-soft)]">Минимум 10 символов.</div>
+              )}
+            </>
           )}
 
           {mode === "signin" && (

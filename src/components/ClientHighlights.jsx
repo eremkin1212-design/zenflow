@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { AlertTriangle, Pencil, Check, Plus, UserRoundPen } from "lucide-react";
+import { AlertTriangle, Pencil, Check, Plus } from "lucide-react";
 import { getHighlights, saveHighlights } from "../data/notes";
 import { getClientById } from "../data/clients";
 import { updateClientProfile } from "../data/clientProfile";
@@ -58,7 +58,7 @@ function ProfileEditor() {
 if (profileEditing) {
 return (
 <div className="rounded-2xl p-3.5 bg-[var(--surface)] border border-[var(--line)] mb-3">
-<div className="text-sm font-medium mb-3 flex items-center gap-2"><UserRoundPen size={15} className="text-[var(--moss)]" /> Редактировать клиента</div>
+<div className="text-sm font-medium mb-3 flex items-center gap-2"><Pencil size={15} className="text-[var(--moss)]" /> Редактировать клиента</div>
 <input value={profile.name} onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))} placeholder="Имя" className="w-full rounded-xl p-2.5 text-sm bg-[var(--surface-alt)] outline-none" />
 <input value={profile.phone} onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))} placeholder="Телефон" inputMode="tel" className="w-full rounded-xl p-2.5 mt-2 text-sm bg-[var(--surface-alt)] outline-none" />
 <div className="flex gap-2 mt-3">
@@ -70,7 +70,7 @@ return (
 }
 return (
 <button onClick={() => setProfileEditing(true)} className="w-full mb-3 rounded-2xl px-3.5 py-3 flex items-center justify-between bg-[var(--surface)] border border-[var(--line)]">
-<span className="flex items-center gap-2 text-sm font-medium"><UserRoundPen size={15} className="text-[var(--moss)]" /> Редактировать клиента</span>
+<span className="flex items-center gap-2 text-sm font-medium"><Pencil size={15} className="text-[var(--moss)]" /> Редактировать клиента</span>
 <Pencil size={14} className="text-[var(--ink-soft)]" />
 </button>
 );

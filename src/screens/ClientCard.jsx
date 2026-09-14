@@ -7,6 +7,7 @@ import ClientNotes from "../components/ClientNotes";
 import ClientHighlights from "../components/ClientHighlights";
 import { getClientById, ratingTag, getHistory, getPayments, getNotes, addNote, getRecommendation, deleteClient } from "../data/clients";
 import { getClientBalance, getClientBalanceTransactions, addClientBalanceAdjustment } from "../data/clientBalance";
+import { updateClientProfile } from "../data/clientProfile";
 
 const TABS = [
   { key: "history", label: "История" },
@@ -37,6 +38,9 @@ export default function ClientCard() {
   const [savingNote, setSavingNote] = useState(false);
   const [savingBalance, setSavingBalance] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingClient, setEditingClient] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({ name: "", phone: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +79,28 @@ export default function ClientCard() {
       setNewNote("");
     } finally {
       setSavingNote(false);
+    }
+  }
+
+  function openClientEditor() {
+    setProfileDraft({ name: client.name || "", phone: client.phone || "" });
+    setEditingClient(true);
+  }
+
+  async function handleSaveClient() {
+    if (!profileDraft.name.trim()) {
+      window.alert("Имя клиента не может быть пустым.");
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const updated = await updateClientProfile(id, profileDraft);
+      setClient((current) => ({ ...current, ...updated }));
+      setEditingClient(false);
+    } catch (error) {
+      window.alert(error?.message || "Не удалось изменить клиента. Проверь подключение.");
+    } finally {
+      setSavingProfile(false);
     }
   }
 
@@ -142,10 +168,12 @@ export default function ClientCard() {
           <div className="mt-3 text-xl font-serif" style={{ fontWeight: 500 }}>{client.name}</div>
           <div className="text-sm mt-0.5 text-[var(--ink-soft)]">{client.phone}</div>
           <div className="mt-2 rounded-full px-3 py-1 text-xs font-medium" style={{ background: tagBg, color: tagFg }}>{tag.label}</div>
-          <div className="flex items-center gap-3 mt-4">
-            <button className="rounded-full p-3" style={{ background: "var(--moss)", color: "var(--on-accent)" }} aria-label="Позвонить"><Phone size={17} /></button>
-            <button className="rounded-full p-3 bg-[var(--surface-alt)] border border-[var(--line)]" aria-label="Написать"><MessageCircle size={17} /></button>
-            <Link to={`/appointment/new?client=${client.id}`} className="rounded-full px-4 py-3 text-sm font-medium flex items-center gap-1.5" style={{ background: "var(--clay)", color: "#FBF9F3" }}><Plus size={15} /> Записать</Link>
+
+          <div className="grid grid-cols-[44px_44px_minmax(0,1fr)_minmax(0,1fr)] gap-2.5 mt-4 w-full">
+            <button className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "var(--moss)", color: "var(--on-accent)" }} aria-label="Позвонить"><Phone size={17} /></button>
+            <button className="w-11 h-11 rounded-full flex items-center justify-center bg-[var(--surface-alt)] border border-[var(--line)]" aria-label="Написать"><MessageCircle size={17} /></button>
+            <Link to={`/appointment/new?client=${client.id}`} className="h-11 rounded-full px-3 text-sm font-medium flex items-center justify-center gap-1.5" style={{ background: "var(--clay)", color: "#FBF9F3" }}><Plus size={15} /> Записать</Link>
+            <button onClick={openClientEditor} className="h-11 rounded-full px-3 text-sm font-medium flex items-center justify-center gap-1.5 border border-[var(--line)]" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}><Pencil size={14} /> Изменить</button>
           </div>
         </div>
 
@@ -199,6 +227,33 @@ export default function ClientCard() {
         </div>
         <BottomNav />
       </div>
+
+      {editingClient && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <button aria-label="Закрыть редактирование" onClick={() => !savingProfile && setEditingClient(false)} className="absolute inset-0 bg-black/30" />
+          <div className="relative w-full max-w-sm rounded-t-[28px] px-5 pt-3 pb-8 bg-[var(--surface)] border-t border-[var(--line)] shadow-2xl">
+            <div className="w-10 h-1 rounded-full bg-[var(--line)] mx-auto mb-5" />
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}><Pencil size={16} /></div>
+              <div>
+                <div className="text-lg font-serif font-medium">Изменить клиента</div>
+                <div className="text-xs text-[var(--ink-soft)]">Имя и номер телефона</div>
+              </div>
+            </div>
+
+            <label className="block mt-5 text-xs font-medium text-[var(--ink-soft)]">Имя</label>
+            <input value={profileDraft.name} onChange={(e) => setProfileDraft((p) => ({ ...p, name: e.target.value }))} autoFocus className="w-full mt-1.5 rounded-2xl px-4 py-3 text-sm bg-[var(--surface-alt)] border border-[var(--line)] outline-none" placeholder="Имя клиента" />
+
+            <label className="block mt-3 text-xs font-medium text-[var(--ink-soft)]">Телефон</label>
+            <input value={profileDraft.phone} onChange={(e) => setProfileDraft((p) => ({ ...p, phone: e.target.value }))} inputMode="tel" className="w-full mt-1.5 rounded-2xl px-4 py-3 text-sm bg-[var(--surface-alt)] border border-[var(--line)] outline-none" placeholder="+7 999 000-00-00" />
+
+            <div className="grid grid-cols-2 gap-2.5 mt-5">
+              <button onClick={() => setEditingClient(false)} disabled={savingProfile} className="rounded-full py-3 text-sm font-medium bg-[var(--surface-alt)] border border-[var(--line)]">Отмена</button>
+              <button onClick={handleSaveClient} disabled={savingProfile} className="rounded-full py-3 text-sm font-medium" style={{ background: "var(--moss)", color: "var(--on-accent)", opacity: savingProfile ? 0.65 : 1 }}>{savingProfile ? "Сохраняем…" : "Сохранить"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

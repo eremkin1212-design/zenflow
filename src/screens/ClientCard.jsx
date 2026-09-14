@@ -225,7 +225,7 @@ export default function ClientCard() {
           {tab === "photos" && <div className="grid grid-cols-3 gap-2.5">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="rounded-2xl aspect-square flex items-center justify-center bg-[var(--surface-alt)] border border-[var(--line)]"><ImageIcon size={20} className="text-[var(--ink-soft)]" /></div>)}<button className="rounded-2xl aspect-square flex items-center justify-center border border-dashed border-[var(--line)]" aria-label="Добавить фото"><Plus size={20} className="text-[var(--moss)]" /></button></div>}
           {tab === "recs" && <div className="rounded-2xl p-4 bg-[var(--surface)] border border-[var(--line)]"><div className="text-sm leading-relaxed">{rec}</div><button className="mt-3 text-sm font-medium text-[var(--moss)]">Изменить рекомендации</button></div>}
         </div>
-        <BottomNav />
+        {!editingClient && <BottomNav />}
       </div>
 
       {editingClient && (

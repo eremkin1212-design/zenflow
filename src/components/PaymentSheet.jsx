@@ -31,6 +31,7 @@ setBusy(false);
 }
 
 const changed = amount !== full;
+const overpay = Math.max(0, amount - full);
 
 return (
 <div className="rounded-2xl p-3 bg-[var(--surface)] border border-[var(--line)]">
@@ -59,6 +60,12 @@ className="flex-1 rounded-xl px-3 py-2.5 text-base font-mono bg-[var(--surface-a
 Полная стоимость {full.toLocaleString("ru-RU")} ₽
 {discount > 0 ? ` · скидка ${discount}%` : ""}
 {amount < full ? ` · минус ${(full - amount).toLocaleString("ru-RU")} ₽` : ""}
+</div>
+)}
+
+{overpay > 0 && (
+<div className="mt-2 rounded-xl px-3 py-2 text-xs" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>
+При оплате наличными {(overpay).toLocaleString("ru-RU")} ₽ будет зачислено на баланс клиента как аванс.
 </div>
 )}
 

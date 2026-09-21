@@ -49,9 +49,22 @@ export async function completeAppointmentWithBalance(appointment,{method,receive
 }
 
 export async function completeAppointment(appointment,method,amount,discount){
-const __full=Number(appointment.full_price ?? appointment.price)||0;
-const __paid=Number.isFinite(Number(amount))&&Number(amount)>=0?Math.round(Number(amount)):__full;
   if(!appointment) throw new Error("Запись не найдена");
+  const __full=Number(appointment.full_price ?? appointment.price)||0;
+  const __paid=Number.isFinite(Number(amount))&&Number(amount)>=0?Math.round(Number(amount)):__full;
+
+  // Быстрая оплата на главном экране и в календаре раньше воспринимала
+  // сумму больше стоимости услуги как новую цену услуги. Для наличных
+  // такая переплата — это аванс клиента: услуга остаётся по своей цене,
+  // а разница записывается в баланс через атомарную RPC.
+  if(method==="Наличные"&&__paid>__full){
+    await completeAppointmentWithBalance(
+      {...appointment,price:__full,full_price:__full},
+      {method,received:__paid,useBalance:false,keepChange:true}
+    );
+    return getAppointmentById(appointment.id);
+  }
+
   const updated=await updateAppointment(appointment.id,{status:"done",price:__paid,full_price:__full});
   const clientId=appointment.client_id??appointment.clients?.id;
   if(clientId){

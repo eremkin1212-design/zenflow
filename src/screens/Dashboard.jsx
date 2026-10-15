@@ -5,7 +5,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import PaymentSheet from "../components/PaymentSheet";
 import { getAppointmentsRange, getAppointmentById, completeAppointment, fmtDate } from "../data/appointments";
-import { redeemCertificate } from "../data/certificates";
+import { getCertificateFinanceRange, redeemCertificate } from "../data/certificates";
 import { useAuth } from "../auth";
 import { getProfile } from "../data/profile";
 
@@ -24,22 +24,52 @@ export default function Dashboard() {
 const { user } = useAuth();
 const [date, setDate] = useState(new Date());
 const [appts, setAppts] = useState([]);
+const [certificateFinance, setCertificateFinance] = useState({ sales: [], redemptions: [], certificatePaidAppointmentIds: [] });
 const [workingHours, setWorkingHours] = useState(null);
 const [status, setStatus] = useState("loading");
 const [profileName, setProfileName] = useState("");
 const [completeId, setCompleteId] = useState(null);
 useEffect(() => { if (!user) return; getProfile(user.id).then((p) => { setProfileName(p?.name || ""); setWorkingHours(p?.working_hours || null); }).catch(() => {}); }, [user]);
-useEffect(() => { let dead = false; setStatus("loading"); getAppointmentsRange(date, date).then((d) => { if (!dead) { setAppts(d); setStatus("ready"); } }).catch(() => { if (!dead) setStatus("error"); }); return () => { dead = true; }; }, [date]);
+useEffect(() => {
+  let dead = false;
+  setStatus("loading");
+  getAppointmentsRange(date, date)
+    .then(async (d) => {
+      const finance = await getCertificateFinanceRange(date, date, (d || []).map((x) => x.id));
+      if (!dead) {
+        setAppts(d);
+        setCertificateFinance(finance);
+        setStatus("ready");
+      }
+    })
+    .catch(() => { if (!dead) setStatus("error"); });
+  return () => { dead = true; };
+}, [date]);
 const wh = hoursForDate(workingHours, date);
 const workMinutes = wh.on ? Math.max(60, mins(wh.end) - mins(wh.start) - (wh.breakStart && wh.breakEnd ? Math.max(0, mins(wh.breakEnd) - mins(wh.breakStart)) : 0)) : 0;
 const active = useMemo(() => appts.filter((a) => a.status !== "cancelled"), [appts]);
 const occupied = active.reduce((s, a) => s + Number(a.duration || 0), 0);
 const load = wh.on && workMinutes ? Math.min(100, Math.round((occupied / workMinutes) * 100)) : 0;
-const income = active.filter((a) => a.status === "done").reduce((s, a) => s + Number(a.price || 0), 0);
+const certificatePaidIds = useMemo(() => new Set((certificateFinance.certificatePaidAppointmentIds || []).map(Number)), [certificateFinance.certificatePaidAppointmentIds]);
+const regularIncome = active.filter((a) => a.status === "done" && !certificatePaidIds.has(Number(a.id))).reduce((s, a) => s + Number(a.price || 0), 0);
+const certificateSalesIncome = (certificateFinance.sales || []).reduce((s, row) => s + Number(row.sale_price || 0), 0);
+const certificateTopupIncome = (certificateFinance.redemptions || []).reduce((s, row) => s + Number(row.topup_amount || 0), 0);
+const income = regularIncome + certificateSalesIncome + certificateTopupIncome;
 const sorted = [...active].sort((a, b) => a.start_time.localeCompare(b.start_time));
 const next = sorted.find((a) => a.status === "planned");
 async function complete(a, method, options) { try { const u = await completeAppointment(a, method, options); setAppts((p) => p.map((x) => x.id === a.id ? u : x)); setCompleteId(null); } catch (e) { window.alert(e?.message || "Не удалось завершить"); } }
-async function completeCertificate(a, options) { try { await redeemCertificate({ certificateNumber: options.certificateNumber, appointmentId: a.id, serviceTotal: options.serviceTotal, topupMethod: options.topupMethod }); const u = await getAppointmentById(a.id); setAppts((p) => p.map((x) => x.id === a.id ? u : x)); setCompleteId(null); } catch (e) { window.alert(e?.message || "Не удалось оплатить сертификатом"); } }
+async function completeCertificate(a, options) {
+  try {
+    await redeemCertificate({ certificateNumber: options.certificateNumber, appointmentId: a.id, serviceTotal: options.serviceTotal, topupMethod: options.topupMethod });
+    const refreshed = await getAppointmentsRange(date, date);
+    const finance = await getCertificateFinanceRange(date, date, refreshed.map((x) => x.id));
+    setAppts(refreshed);
+    setCertificateFinance(finance);
+    setCompleteId(null);
+  } catch (e) {
+    window.alert(e?.message || "Не удалось оплатить сертификатом");
+  }
+}
 return <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans transition-colors"><div className="max-w-sm mx-auto relative pb-40">
 <div className="flex items-start justify-between px-5 pt-7 pb-4"><div><div className="text-2xl font-serif" style={{ fontWeight: 500 }}>{greeting(new Date().getHours())}{profileName ? `, ${profileName.split(" ")[0]}` : ""}</div><div className="text-sm mt-1 capitalize text-[var(--ink-soft)]">{date.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</div></div><ThemeToggle /></div>
 <div className="mx-5 rounded-3xl px-5 py-5 bg-[var(--surface)] border border-[var(--line)]"><div className="flex items-center gap-5"><div className="relative w-[92px] h-[92px] shrink-0"><svg width="92" height="92" viewBox="0 0 92 92" className="-rotate-90"><circle cx="46" cy="46" r="36" fill="none" stroke="var(--line)" strokeWidth="7" /><circle cx="46" cy="46" r="36" fill="none" stroke="var(--moss)" strokeWidth="7" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 36}`} strokeDashoffset={`${2 * Math.PI * 36 * (1 - load / 100)}`} /></svg><div className="absolute inset-0 flex items-center justify-center text-lg font-mono font-medium">{load}%</div></div><div className="flex-1"><div className="flex items-center justify-between"><div className="text-xs uppercase text-[var(--ink-soft)]" style={{ letterSpacing: ".08em" }}>Итоги дня</div><div className="flex gap-1"><button onClick={() => setDate((d) => addDays(d, -1))} className="p-1.5 rounded-full bg-[var(--surface-alt)]"><ChevronLeft size={15} /></button><button onClick={() => setDate((d) => addDays(d, 1))} className="p-1.5 rounded-full bg-[var(--surface-alt)]"><ChevronRight size={15} /></button></div></div><div className="mt-1 text-2xl font-mono" style={{ fontWeight: 500 }}>{income.toLocaleString("ru-RU")} ₽</div><div className="text-sm mt-1 text-[var(--ink-soft)]">{occupied >= 60 ? `${Math.floor(occupied / 60)} ч ${occupied % 60 ? `${occupied % 60} мин` : ""}` : `${occupied} мин`} занято · {active.length} записей</div><div className="text-xs mt-1 text-[var(--ink-soft)]">{wh.on ? `График ${wh.start}–${wh.end}` : "Выходной"}</div></div></div></div>

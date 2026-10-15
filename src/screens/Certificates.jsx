@@ -63,6 +63,7 @@ export default function Certificates() {
     amount: "",
     sessions: "5",
     salePrice: "",
+    saleMethod: "Наличные",
     expiresAt: "",
     note: "",
   });
@@ -89,7 +90,7 @@ export default function Certificates() {
   );
 
   function resetDraft() {
-    setDraft({ kind: "amount", clientId: "", serviceId: "", amount: "", sessions: "5", salePrice: "", expiresAt: "", note: "" });
+    setDraft({ kind: "amount", clientId: "", serviceId: "", amount: "", sessions: "5", salePrice: "", saleMethod: "Наличные", expiresAt: "", note: "" });
   }
 
   async function handleCreate() {
@@ -102,6 +103,7 @@ export default function Certificates() {
         amount: draft.amount,
         sessions: draft.sessions,
         salePrice: draft.salePrice,
+        saleMethod: draft.saleMethod,
         expiresAt: draft.expiresAt,
         note: draft.note,
       });
@@ -231,6 +233,13 @@ export default function Certificates() {
                 </select>
               </label>
 
+              <div className="mt-3">
+                <div className="text-xs text-[var(--ink-soft)]">Как оплатили при продаже</div>
+                <div className="grid grid-cols-3 gap-1 mt-1.5 p-1 rounded-full bg-[var(--surface-alt)]">
+                  {["Наличные","Карта","Другое"].map((method)=><button key={method} onClick={()=>setDraft((d)=>({...d,saleMethod:method}))} className="rounded-full py-2 text-[11px] font-medium" style={{background:draft.saleMethod===method?"var(--moss)":"transparent",color:draft.saleMethod===method?"var(--on-accent)":"var(--ink-soft)"}}>{method}</button>)}
+                </div>
+              </div>
+
               <label className="block mt-3 text-xs text-[var(--ink-soft)]">
                 Действует до
                 <input type="date" value={draft.expiresAt} onChange={(e) => setDraft((d) => ({ ...d, expiresAt: e.target.value }))} className="mt-1 w-full rounded-xl p-3 text-sm bg-[var(--surface-alt)] outline-none" />
@@ -269,7 +278,7 @@ export default function Certificates() {
                   </div>
                   <div className="mt-3 text-lg font-mono">{balanceText(certificate)}</div>
                   {certificate.services?.name && <div className="text-xs mt-1 text-[var(--ink-soft)]">{certificate.services.name}</div>}
-                  {certificate.sale_price > 0 && <div className="text-xs mt-1 text-[var(--ink-soft)]">Стоимость при выпуске: {money(certificate.sale_price)} ₽</div>}
+                  {certificate.sale_price > 0 && <div className="text-xs mt-1 text-[var(--ink-soft)]">Продажа: {money(certificate.sale_price)} ₽ · {certificate.sale_method || "Наличные"}</div>}
                   {certificate.clients?.name && <div className="text-xs mt-1 text-[var(--ink-soft)]">Клиент: {certificate.clients.name}</div>}
                   {certificate.expires_at && <div className="text-[11px] mt-2 text-[var(--ink-soft)]">До {new Date(`${certificate.expires_at}T12:00:00`).toLocaleDateString("ru-RU")}</div>}
                 </button>
@@ -296,7 +305,7 @@ export default function Certificates() {
               </button>
 
               {selected.services?.name && <div className="mt-3 text-sm">Услуга: <b>{selected.services.name}</b></div>}
-              {selected.sale_price > 0 && <div className="mt-1 text-sm">Стоимость при выпуске: <b>{money(selected.sale_price)} ₽</b></div>}
+              {selected.sale_price > 0 && <div className="mt-1 text-sm">Продажа: <b>{money(selected.sale_price)} ₽</b> · {selected.sale_method || "Наличные"}</div>}
               {selected.clients?.name && <div className="mt-1 text-sm">Клиент: <b>{selected.clients.name}</b></div>}
               {selected.note && <div className="mt-3 rounded-xl p-3 text-sm bg-[var(--surface-alt)]">{selected.note}</div>}
 

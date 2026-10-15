@@ -1,14 +1,25 @@
 // Слой доступа к данным об услугах — реальная база вместо моков.
 
 import { supabase } from "../lib/supabaseClient";
+import { cacheResource, getCachedResource } from "./offlineStore";
 
 export async function getServices() {
-  const { data, error } = await supabase
-    .from("services")
-    .select("*")
-    .order("id", { ascending: true });
-  if (error) throw error;
-  return data;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const ownerId = sessionData?.session?.user?.id || null;
+  try {
+    const { data, error } = await supabase
+      .from("services")
+      .select("*")
+      .order("id", { ascending: true });
+    if (error) throw error;
+    const result = data || [];
+    if (ownerId) cacheResource(ownerId, "services", result);
+    return result;
+  } catch (error) {
+    const cached = ownerId ? getCachedResource(ownerId, "services", null) : null;
+    if (Array.isArray(cached)) return cached;
+    throw error;
+  }
 }
 
 export async function createService({ name, color, duration, price }) {

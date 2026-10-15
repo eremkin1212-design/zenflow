@@ -52,10 +52,10 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
 
   async function pay(method) {
     if (serviceTotal === null) {
-      window.alert("Укажи стоимость услуги.");
+      window.alert(customPrice ? "Укажи сумму оплаты." : "Укажи стоимость услуги.");
       return;
     }
-    if (method === "Наличные" && received === null) {
+    if (!customPrice && method === "Наличные" && received === null) {
       window.alert("Укажи, сколько получено наличными.");
       return;
     }
@@ -63,7 +63,7 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
     try {
       await onPay(method, {
         serviceTotal,
-        received: method === "Наличные" ? received : serviceTotal,
+        received: customPrice ? serviceTotal : method === "Наличные" ? received : serviceTotal,
         discount,
         rememberPrice: customPrice && rememberPrice,
       });
@@ -103,7 +103,7 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
 
       {customPrice && (
         <div className="mt-3">
-          <div className="text-xs font-medium text-[var(--ink-soft)]">Стоимость услуги</div>
+          <div className="text-xs font-medium text-[var(--ink-soft)]">Сумма оплаты</div>
           <div className="flex items-center gap-2 mt-1.5">
             <input
               type="text"
@@ -154,7 +154,7 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
         </div>
       )}
 
-      <div className="mt-3">
+      {!customPrice && <div className="mt-3">
         <div className="text-xs font-medium text-[var(--ink-soft)]">Получено наличными</div>
         <div className="flex items-center gap-2 mt-1.5">
           <input
@@ -168,8 +168,8 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
           />
           <span className="text-base font-mono">₽</span>
         </div>
-        <div className="text-[11px] mt-1 text-[var(--ink-soft)]">Для оплаты картой это поле не используется.</div>
-      </div>
+        <div className="text-[11px] mt-1 text-[var(--ink-soft)]">Нужно только для наличных, если клиент дал сумму больше стоимости.</div>
+      </div>}
 
       <div className="flex gap-2 mt-3">
         <button

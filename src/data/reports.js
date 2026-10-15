@@ -5,7 +5,7 @@ import { fmtDate } from "./appointments";
 export async function getServiceBreakdown(startDate, endDate) {
 const { data, error } = await supabase
 .from("appointment_services")
-.select("price,duration,services(name,color),appointments!inner(date,status)")
+.select("appointment_id,price,duration,services(name,color),appointments!inner(date,status)")
 .gte("appointments.date", fmtDate(startDate))
 .lte("appointments.date", fmtDate(endDate))
 .eq("appointments.status", "done");

@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth";
-import { syncOfflineAppointments } from "../data/appointments";
+import { getAppointmentsRange, syncOfflineAppointments } from "../data/appointments";
+import { getClients } from "../data/clients";
+import { getServices } from "../data/services";
+import { getProfile } from "../data/profile";
 import { getPendingAppointments } from "../data/offlineStore";
 
 export default function OfflineSyncBridge() {
@@ -13,6 +16,20 @@ export default function OfflineSyncBridge() {
   const refresh = useCallback(() => {
     setOnline(typeof navigator === "undefined" ? true : navigator.onLine);
     setPending(user?.id ? getPendingAppointments(user.id).length : 0);
+  }, [user?.id]);
+
+  const warmOfflineCache = useCallback(async () => {
+    if (!user?.id || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
+    const start = new Date();
+    start.setDate(start.getDate() - 14);
+    const end = new Date();
+    end.setDate(end.getDate() + 90);
+    await Promise.allSettled([
+      getClients(),
+      getServices(),
+      getProfile(user.id),
+      getAppointmentsRange(start, end),
+    ]);
   }, [user?.id]);
 
   const runSync = useCallback(async () => {
@@ -40,8 +57,9 @@ export default function OfflineSyncBridge() {
     }
     refresh();
     runSync();
+    warmOfflineCache();
 
-    const onOnline = () => { setOnline(true); runSync(); };
+    const onOnline = () => { setOnline(true); runSync(); warmOfflineCache(); };
     const onOffline = () => { setOnline(false); refresh(); };
     const onChange = () => { refresh(); if (navigator.onLine) runSync(); };
     const onVisible = () => { if (document.visibilityState === "visible") runSync(); };
@@ -61,7 +79,7 @@ export default function OfflineSyncBridge() {
       document.removeEventListener("visibilitychange", onVisible);
       window.clearInterval(timer);
     };
-  }, [user?.id, refresh, runSync]);
+  }, [user?.id, refresh, runSync, warmOfflineCache]);
 
   if (!user?.id) return null;
   if (online && !pending && !syncing) return null;

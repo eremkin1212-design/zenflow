@@ -8,7 +8,7 @@ import { getProfile } from "../data/profile";
 import { getServices } from "../data/services";
 import { getClients, getClientById, createClient } from "../data/clients";
 import { getClientBalance } from "../data/clientBalance";
-import { getAppointmentById, getAppointmentServices, getAppointmentPayment, updateAppointmentPayment, createAppointment, updateAppointment, saveAppointmentServices, completeAppointmentWithBalance, fmtDate } from "../data/appointments";
+import { getAppointmentById, getAppointmentServices, getAppointmentPayment, updateAppointmentPayment, createAppointmentOfflineReady, updateAppointment, saveAppointmentServices, completeAppointmentWithBalance, fmtDate } from "../data/appointments";
 
 const WEEKDAYS=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 const KEYS=["mon","tue","wed","thu","fri","sat","sun"];
@@ -68,9 +68,15 @@ export default function AppointmentForm(){
     a=await updateAppointment(id,{...basePayload,date:fmtDate(date),start_time:minToTime(timeMin)});
     await saveAppointmentServices(a.id,selectedServices);
    }else{
+    let forceQueue=typeof navigator!=="undefined"&&navigator.onLine===false;
+    const clientMeta=clients.find(c=>String(c.id)===String(client.id))||client;
     for(const slot of slots){
-     a=await createAppointment({...basePayload,date:slot.date,start_time:slot.time,status:"planned"});
-     await saveAppointmentServices(a.id,selectedServices);
+     a=await createAppointmentOfflineReady(
+      {...basePayload,date:slot.date,start_time:slot.time,status:"planned"},
+      selectedServices,
+      {client:clientMeta,forceQueue}
+     );
+     if(a?._offline) forceQueue=true;
     }
    }
    if(payment)await updateAppointmentPayment(payment.id,price);

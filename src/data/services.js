@@ -3,14 +3,20 @@
 import { supabase } from "../lib/supabaseClient";
 import { cacheResource, getCachedResource } from "./offlineStore";
 
+function withReadTimeout(promise, ms = 5000) {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("offline read timeout")), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export async function getServices() {
   const { data: sessionData } = await supabase.auth.getSession();
   const ownerId = sessionData?.session?.user?.id || null;
   try {
-    const { data, error } = await supabase
-      .from("services")
-      .select("*")
-      .order("id", { ascending: true });
+    if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("offline");
+    const { data, error } = await withReadTimeout(
+      supabase.from("services").select("*").order("id", { ascending: true })
+    );
     if (error) throw error;
     const result = data || [];
     if (ownerId) cacheResource(ownerId, "services", result);

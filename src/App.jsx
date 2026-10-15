@@ -12,6 +12,7 @@ import ClientForm from "./screens/ClientForm";
 import AppointmentForm from "./screens/AppointmentForm";
 import Finance from "./screens/Finance";
 import Settings from "./screens/Settings";
+import Certificates from "./screens/Certificates";
 import Support from "./screens/Support";
 import SupportConversation from "./screens/SupportConversation";
 import SupportAdmin from "./screens/SupportAdmin";
@@ -40,6 +41,7 @@ function Routed() {
       <Route path="/appointment/:mode" element={<RequireAuth><AppointmentForm /></RequireAuth>} />
       <Route path="/finance" element={<RequireAuth><Finance /></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+      <Route path="/certificates" element={<RequireAuth><Certificates /></RequireAuth>} />
       <Route path="/support" element={<RequireAuth><Support /></RequireAuth>} />
       <Route path="/support/:id" element={<RequireAuth><SupportConversation /></RequireAuth>} />
       <Route path="/support-admin" element={<RequireAuth><SupportAdmin /></RequireAuth>} />

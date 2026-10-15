@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabaseClient";
 import { getClientBalance } from "./clientBalance";
+import { setClientServicePrice } from "./clientServicePrices";
 import {
   makeOfflineId,
   queuePendingAppointment,
@@ -178,51 +179,73 @@ export async function completeAppointmentWithBalance(appointment,{method,receive
   return data;
 }
 
-export async function completeAppointment(appointment,method,amount,discount){
+export async function completeAppointment(appointment,method,options={}){
   if(!appointment) throw new Error("Запись не найдена");
-  const full=Math.max(0,Math.round(Number(appointment.full_price ?? appointment.price)||0));
-  const entered=Number.isFinite(Number(amount))&&Number(amount)>=0?Math.round(Number(amount)):full;
-  const discountPercent=Math.max(0,Math.round(Number(discount)||0));
-  const serviceTotal=discountPercent>0?Math.round(full*(1-discountPercent/100)):full;
+
+  // Быстрая оплата: стоимость услуги и сумма, которую клиент передал,
+  // являются разными величинами. В финансы всегда идёт serviceTotal.
+  const currentPrice=Math.max(0,Math.round(Number(appointment.price ?? appointment.full_price)||0));
+  const discountPercent=Math.max(0,Math.round(Number(options?.discount)||0));
+  const serviceTotal=Math.max(
+    0,
+    Math.round(
+      Number.isFinite(Number(options?.serviceTotal))
+        ? Number(options.serviceTotal)
+        : discountPercent>0
+          ? currentPrice*(1-discountPercent/100)
+          : currentPrice
+    )
+  );
   const clientId=appointment.client_id??appointment.clients?.id;
+  const methodName=method||"Наличные";
   const balance=clientId?Math.max(0,await getClientBalance(clientId)):0;
   const balanceUsed=Math.min(balance,serviceTotal);
   const dueAfterBalance=Math.max(0,serviceTotal-balanceUsed);
+  const received=methodName==="Наличные"
+    ? Math.max(0,Math.round(Number(options?.received ?? dueAfterBalance)||0))
+    : dueAfterBalance;
 
-  // Быстрая оплата на главном экране и в календаре теперь всегда учитывает
-  // существующий баланс клиента. Введённая сумма для наличных — это сколько
-  // реально дал клиент, а не новая стоимость услуги.
-  if(balance>0||(method==="Наличные"&&entered>serviceTotal)){
-    const received=method==="Наличные"
-      ? (discountPercent>0?dueAfterBalance:entered)
-      : dueAfterBalance;
-    await completeAppointmentWithBalance(
-      {...appointment,price:serviceTotal,full_price:serviceTotal},
-      {method,received,useBalance:true,keepChange:method==="Наличные",serviceTotal}
-    );
-    // RPC хранит итоговую стоимость сеанса в price. Исходную стоимость до скидки
-    // возвращаем в full_price, чтобы история скидок оставалась корректной.
-    if(full!==serviceTotal){
-      await updateAppointment(appointment.id,{full_price:full});
-    }
-    return getAppointmentById(appointment.id);
+  if(methodName==="Наличные"&&received<dueAfterBalance){
+    throw new Error(`Не хватает ${(dueAfterBalance-received).toLocaleString("ru-RU")} ₽`);
   }
 
-  const updated=await updateAppointment(appointment.id,{status:"done",price:serviceTotal,full_price:full});
-  if(clientId){
-    const { data: existing, error: lookupError } = await supabase
-      .from("client_payments")
-      .select("id,amount,method,date,discount_percent")
-      .eq("appointment_id",appointment.id)
-      .limit(1)
-      .maybeSingle();
-    if(lookupError) throw lookupError;
-    if(!existing){
-      const {error}=await supabase.from("client_payments").insert({client_id:clientId,appointment_id:appointment.id,amount:serviceTotal,discount_percent:discountPercent,method,date:fmtDate(new Date())});
-      if(error) throw error;
+  await completeAppointmentWithBalance(
+    {...appointment,price:serviceTotal,full_price:serviceTotal},
+    {
+      method:methodName,
+      received,
+      useBalance:true,
+      keepChange:methodName==="Наличные"&&received>dueAfterBalance,
+      serviceTotal,
+    }
+  );
+
+  // Для одной услуги синхронизируем цену строки услуги с фактической
+  // стоимостью визита, чтобы карточка клиента не показывала старую сумму.
+  const {data:serviceRows,error:serviceRowsError}=await supabase
+    .from("appointment_services")
+    .select("id,service_id")
+    .eq("appointment_id",appointment.id)
+    .order("id")
+    .limit(2);
+  if(!serviceRowsError&&serviceRows?.length===1){
+    await supabase.from("appointment_services").update({price:serviceTotal}).eq("id",serviceRows[0].id);
+  }
+
+  if(discountPercent>0&&currentPrice!==serviceTotal){
+    await updateAppointment(appointment.id,{full_price:currentPrice});
+  }
+
+  if(options?.rememberPrice&&clientId){
+    const serviceId=serviceRows?.length===1
+      ? serviceRows[0].service_id
+      : appointment.service_id??appointment.services?.id;
+    if(serviceId&&(!serviceRows||serviceRows.length<=1)){
+      await setClientServicePrice(clientId,serviceId,serviceTotal);
     }
   }
-  return updated;
+
+  return getAppointmentById(appointment.id);
 }
 
 export function shiftRepeatDate(base,unit,step){

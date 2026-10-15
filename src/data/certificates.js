@@ -58,6 +58,7 @@ export async function createCertificate({
   sessions,
   expiresAt,
   note,
+  salePrice,
 }) {
   const normalizedKind = ["amount", "service", "sessions"].includes(kind) ? kind : "amount";
   const amountValue = normalizedKind === "amount" ? Math.max(0, Math.round(Number(amount) || 0)) : 0;
@@ -76,6 +77,7 @@ export async function createCertificate({
     remaining_sessions: sessionsValue,
     expires_at: expiresAt || null,
     note: String(note || "").trim() || null,
+    sale_price: normalizedKind === "amount" ? amountValue : Math.max(0, Math.round(Number(salePrice) || 0)),
   };
 
   const { data, error } = await supabase

@@ -182,7 +182,11 @@ export default function Certificates() {
 
               <div className="grid grid-cols-3 gap-1 mt-4 p-1 rounded-full bg-[var(--surface-alt)]">
                 {TYPES.map(([key, label]) => (
-                  <button key={key} onClick={() => setDraft((d) => ({ ...d, kind: key, serviceId: key === "amount" ? "" : d.serviceId, salePrice: key === "amount" ? "" : d.salePrice }))} className="rounded-full py-2 text-[11px] font-medium" style={{ background: draft.kind === key ? "var(--moss)" : "transparent", color: draft.kind === key ? "var(--on-accent)" : "var(--ink-soft)" }}>
+                  <button key={key} onClick={() => setDraft((d) => {
+                    const service=services.find((s)=>String(s.id)===String(d.serviceId));
+                    const count=key==="sessions"?Math.max(1,Number(d.sessions)||1):1;
+                    return {...d,kind:key,serviceId:key==="amount"?"":d.serviceId,salePrice:key==="amount"?"":service?String(Number(service.price||0)*count):d.salePrice};
+                  })} className="rounded-full py-2 text-[11px] font-medium" style={{ background: draft.kind === key ? "var(--moss)" : "transparent", color: draft.kind === key ? "var(--on-accent)" : "var(--ink-soft)" }}>
                     {label}
                   </button>
                 ))}

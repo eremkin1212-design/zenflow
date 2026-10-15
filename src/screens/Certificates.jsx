@@ -62,6 +62,7 @@ export default function Certificates() {
     serviceId: "",
     amount: "",
     sessions: "5",
+    salePrice: "",
     expiresAt: "",
     note: "",
   });
@@ -88,7 +89,7 @@ export default function Certificates() {
   );
 
   function resetDraft() {
-    setDraft({ kind: "amount", clientId: "", serviceId: "", amount: "", sessions: "5", expiresAt: "", note: "" });
+    setDraft({ kind: "amount", clientId: "", serviceId: "", amount: "", sessions: "5", salePrice: "", expiresAt: "", note: "" });
   }
 
   async function handleCreate() {
@@ -100,6 +101,7 @@ export default function Certificates() {
         serviceId: draft.serviceId ? Number(draft.serviceId) : null,
         amount: draft.amount,
         sessions: draft.sessions,
+        salePrice: draft.salePrice,
         expiresAt: draft.expiresAt,
         note: draft.note,
       });
@@ -178,7 +180,7 @@ export default function Certificates() {
 
               <div className="grid grid-cols-3 gap-1 mt-4 p-1 rounded-full bg-[var(--surface-alt)]">
                 {TYPES.map(([key, label]) => (
-                  <button key={key} onClick={() => setDraft((d) => ({ ...d, kind: key }))} className="rounded-full py-2 text-[11px] font-medium" style={{ background: draft.kind === key ? "var(--moss)" : "transparent", color: draft.kind === key ? "var(--on-accent)" : "var(--ink-soft)" }}>
+                  <button key={key} onClick={() => setDraft((d) => ({ ...d, kind: key, serviceId: key === "amount" ? "" : d.serviceId, salePrice: key === "amount" ? "" : d.salePrice }))} className="rounded-full py-2 text-[11px] font-medium" style={{ background: draft.kind === key ? "var(--moss)" : "transparent", color: draft.kind === key ? "var(--on-accent)" : "var(--ink-soft)" }}>
                     {label}
                   </button>
                 ))}
@@ -193,7 +195,12 @@ export default function Certificates() {
                 <>
                   <label className="block mt-3 text-xs text-[var(--ink-soft)]">
                     Услуга
-                    <select value={draft.serviceId} onChange={(e) => setDraft((d) => ({ ...d, serviceId: e.target.value }))} className="mt-1 w-full rounded-xl p-3 text-sm bg-[var(--surface-alt)] outline-none">
+                    <select value={draft.serviceId} onChange={(e) => {
+                      const value=e.target.value;
+                      const service=services.find((s)=>String(s.id)===String(value));
+                      const count=draft.kind==="sessions"?Math.max(1,Number(draft.sessions)||1):1;
+                      setDraft((d)=>({...d,serviceId:value,salePrice:service?String(Number(service.price||0)*count):""}));
+                    }} className="mt-1 w-full rounded-xl p-3 text-sm bg-[var(--surface-alt)] outline-none">
                       <option value="">Выберите услугу</option>
                       {services.map((s) => <option key={s.id} value={s.id}>{s.name} · {money(s.price)} ₽</option>)}
                     </select>
@@ -201,9 +208,18 @@ export default function Certificates() {
                   {draft.kind === "sessions" && (
                     <label className="block mt-3 text-xs text-[var(--ink-soft)]">
                       Количество сеансов
-                      <input value={draft.sessions} onChange={(e) => setDraft((d) => ({ ...d, sessions: e.target.value.replace(/[^0-9]/g, "") }))} inputMode="numeric" placeholder="5" className="mt-1 w-full rounded-xl p-3 text-base font-mono bg-[var(--surface-alt)] outline-none" />
+                      <input value={draft.sessions} onChange={(e) => {
+                        const clean=e.target.value.replace(/[^0-9]/g,"");
+                        const service=services.find((s)=>String(s.id)===String(draft.serviceId));
+                        setDraft((d)=>({...d,sessions:clean,salePrice:service?String(Number(service.price||0)*Math.max(1,Number(clean)||1)):d.salePrice}));
+                      }} inputMode="numeric" placeholder="5" className="mt-1 w-full rounded-xl p-3 text-base font-mono bg-[var(--surface-alt)] outline-none" />
                     </label>
                   )}
+                  <label className="block mt-3 text-xs text-[var(--ink-soft)]">
+                    Стоимость {draft.kind === "sessions" ? "абонемента" : "сертификата"}, ₽
+                    <input value={draft.salePrice} onChange={(e) => setDraft((d) => ({ ...d, salePrice: e.target.value.replace(/[^0-9]/g, "") }))} inputMode="numeric" placeholder="0" className="mt-1 w-full rounded-xl p-3 text-base font-mono bg-[var(--surface-alt)] outline-none" />
+                    <span className="block mt-1 text-[10px]">Это цена продажи. При использовании списывается сеанс, а не эта сумма.</span>
+                  </label>
                 </>
               )}
 
@@ -253,6 +269,7 @@ export default function Certificates() {
                   </div>
                   <div className="mt-3 text-lg font-mono">{balanceText(certificate)}</div>
                   {certificate.services?.name && <div className="text-xs mt-1 text-[var(--ink-soft)]">{certificate.services.name}</div>}
+                  {certificate.sale_price > 0 && <div className="text-xs mt-1 text-[var(--ink-soft)]">Стоимость при выпуске: {money(certificate.sale_price)} ₽</div>}
                   {certificate.clients?.name && <div className="text-xs mt-1 text-[var(--ink-soft)]">Клиент: {certificate.clients.name}</div>}
                   {certificate.expires_at && <div className="text-[11px] mt-2 text-[var(--ink-soft)]">До {new Date(`${certificate.expires_at}T12:00:00`).toLocaleDateString("ru-RU")}</div>}
                 </button>
@@ -279,6 +296,7 @@ export default function Certificates() {
               </button>
 
               {selected.services?.name && <div className="mt-3 text-sm">Услуга: <b>{selected.services.name}</b></div>}
+              {selected.sale_price > 0 && <div className="mt-1 text-sm">Стоимость при выпуске: <b>{money(selected.sale_price)} ₽</b></div>}
               {selected.clients?.name && <div className="mt-1 text-sm">Клиент: <b>{selected.clients.name}</b></div>}
               {selected.note && <div className="mt-3 rounded-xl p-3 text-sm bg-[var(--surface-alt)]">{selected.note}</div>}
 

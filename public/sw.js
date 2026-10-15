@@ -3,8 +3,33 @@
 
 const VERSION = "ritena-v2";
 
-self.addEventListener("install", () => {
-  self.skipWaiting();
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(VERSION);
+      try {
+        const shell = await fetch("/", { cache: "no-store" });
+        if (shell.ok) {
+          await cache.put("/", shell.clone());
+          const html = await shell.text();
+          const paths = [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)]
+            .map((m) => m[1])
+            .filter((value) => value && !value.startsWith("data:"))
+            .map((value) => new URL(value, self.location.origin))
+            .filter((url) => url.origin === self.location.origin && url.pathname !== "/sw.js")
+            .map((url) => url.pathname + url.search);
+          await Promise.all([...new Set(paths)].map((asset) => cache.add(asset).catch(() => {})));
+        }
+        await Promise.all([
+          "/manifest.webmanifest",
+          "/icon-192.png",
+          "/icon-512.png",
+          "/apple-touch-icon.png",
+        ].map((asset) => cache.add(asset).catch(() => {})));
+      } catch {}
+      await self.skipWaiting();
+    })()
+  );
 });
 
 self.addEventListener("activate", (event) => {

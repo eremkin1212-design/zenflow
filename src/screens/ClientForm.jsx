@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Capacitor } from "@capacitor/core";
 import { ArrowLeft, UserPlus } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import { createClient } from "../data/clients";
+import { canPickPhoneContact, isContactPickerCancel, pickPhoneContact } from "../lib/contactPicker";
 
 export default function ClientForm() {
   const navigate = useNavigate();
@@ -12,34 +12,22 @@ export default function ClientForm() {
   const [saving, setSaving] = useState(false);
   const [pickingContact, setPickingContact] = useState(false);
   const [error, setError] = useState("");
-  const canPickContact = Capacitor.isNativePlatform();
+  const canPickContact = canPickPhoneContact();
 
   async function handlePickContact() {
     setPickingContact(true);
     setError("");
     try {
-      const { CapacitorContacts, ContactProperty } = await import("@capgo/capacitor-contacts");
-      const { contacts = [] } = await CapacitorContacts.pickContacts({
-        property: ContactProperty.PhoneNumber,
-      });
-      const contact = contacts[0];
-      if (!contact) return;
-
-      const pickedName = String(
-        contact.displayName ||
-        [contact.givenName, contact.middleName, contact.familyName].filter(Boolean).join(" ")
-      ).trim();
-      const pickedPhone = String(contact.phoneNumbers?.[0]?.value || "").trim();
-
-      if (pickedName) setName(pickedName);
-      if (pickedPhone) setPhone(pickedPhone);
-      if (!pickedName && !pickedPhone) {
+      const picked = await pickPhoneContact();
+      if (!picked) return;
+      if (picked.name) setName(picked.name);
+      if (picked.phone) setPhone(picked.phone);
+      if (!picked.name && !picked.phone) {
         setError("У выбранного контакта не удалось получить имя или номер телефона.");
       }
     } catch (err) {
-      const message = String(err?.message || "").toLowerCase();
-      if (!message.includes("cancel") && !message.includes("отмен")) {
-        setError("Не удалось открыть телефонную книгу. Попробуй ещё раз.");
+      if (!isContactPickerCancel(err)) {
+        setError("Не удалось открыть контакты. Попробуй ещё раз.");
       }
     } finally {
       setPickingContact(false);

@@ -46,8 +46,12 @@ export async function getAppointmentsRange(startDate,endDate){
   const startKey=fmtDate(startDate),endKey=fmtDate(endDate);
   const ownerId=await currentOwnerId();
   const pending=ownerId?getPendingAppointmentsRange(ownerId,startKey,endKey):[];
+  if(typeof navigator!=="undefined"&&navigator.onLine===false){
+    const cached=ownerId?getCachedAppointmentsRange(ownerId,startKey,endKey):[];
+    return sortAppointments([...cached,...pending]);
+  }
   try{
-    const {data,error}=await supabase.from("appointments").select(SELECT).gte("date",startKey).lte("date",endKey).order("date").order("start_time");
+    const {data,error}=await withTimeout(supabase.from("appointments").select(SELECT).gte("date",startKey).lte("date",endKey).order("date").order("start_time"),5000);
     if(error)throw error;
     const remote=data||[];
     if(ownerId){

@@ -1,5 +1,6 @@
 // Слой доступа к данным о клиентах — реальная база Supabase.
 import { supabase } from "../lib/supabaseClient";
+import { cacheResource, getCachedResource } from "./offlineStore";
 
 export function ratingTag(c) {
   if (c.last_visit?.includes("месяц") || c.last_visit?.includes("год")) return { label: "Редкий клиент", tone: "clay" };
@@ -70,20 +71,48 @@ function withStats(client, stats, nextVisits) {
   };
 }
 
+async function currentOwnerId() {
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.user?.id || null;
+}
+
 export async function getClients() {
-  const { data, error } = await supabase.from("clients").select("*").order("id", { ascending: true });
-  if (error) throw error;
-  const ids = (data || []).map((c) => c.id);
-  const [stats, nextVisits] = await Promise.all([getAppointmentStats(ids), getNextVisits(ids)]);
-  return (data || []).map((c) => withStats(c, stats, nextVisits));
+  const ownerId = await currentOwnerId();
+  try {
+    const { data, error } = await supabase.from("clients").select("*").order("id", { ascending: true });
+    if (error) throw error;
+    const ids = (data || []).map((c) => c.id);
+    const [stats, nextVisits] = await Promise.all([getAppointmentStats(ids), getNextVisits(ids)]);
+    const result = (data || []).map((c) => withStats(c, stats, nextVisits));
+    if (ownerId) cacheResource(ownerId, "clients", result);
+    return result;
+  } catch (error) {
+    const cached = ownerId ? getCachedResource(ownerId, "clients", null) : null;
+    if (Array.isArray(cached)) return cached;
+    throw error;
+  }
 }
 
 export async function getClientById(id) {
-  const { data, error } = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  const [stats, nextVisits] = await Promise.all([getAppointmentStats([data.id]), getNextVisits([data.id])]);
-  return withStats(data, stats, nextVisits);
+  const ownerId = await currentOwnerId();
+  try {
+    const { data, error } = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const [stats, nextVisits] = await Promise.all([getAppointmentStats([data.id]), getNextVisits([data.id])]);
+    const result = withStats(data, stats, nextVisits);
+    if (ownerId) {
+      const cached = getCachedResource(ownerId, "clients", []);
+      const next = [...(Array.isArray(cached) ? cached : []).filter((c) => String(c.id) !== String(result.id)), result];
+      cacheResource(ownerId, "clients", next);
+    }
+    return result;
+  } catch (error) {
+    const cached = ownerId ? getCachedResource(ownerId, "clients", []) : [];
+    const match = (Array.isArray(cached) ? cached : []).find((c) => String(c.id) === String(id));
+    if (match) return match;
+    throw error;
+  }
 }
 
 export async function getHistory(clientId) {

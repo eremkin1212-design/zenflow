@@ -7,6 +7,7 @@ import PracticeReport from "../components/PracticeReport";
 import { getAppointmentsRange, fmtDate } from "../data/appointments";
 import { getExpensesRange, createExpense, updateExpense, deleteExpense } from "../data/expenses";
 import { getProfile } from "../data/profile";
+import { getCertificateFinanceRange } from "../data/certificates";
 import { useAuth } from "../auth";
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"], ["report", "Отчёты"]];
@@ -48,14 +49,29 @@ const [selectedWeek, setSelectedWeek] = useState(() => startOfWeek(now));
 const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(now));
 const [weekPickerOpen, setWeekPickerOpen] = useState(false);
 const [weekPickerMonth, setWeekPickerMonth] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1));
-const [appts, setAppts] = useState([]), [expenses, setExpenses] = useState([]), [status, setStatus] = useState("loading");
+const [appts, setAppts] = useState([]), [expenses, setExpenses] = useState([]), [certificateFinance, setCertificateFinance] = useState({ sales: [], redemptions: [], certificatePaidAppointmentIds: [] }), [status, setStatus] = useState("loading");
 const [schedule, setSchedule] = useState(null);
 const [showAddExpense, setShowAddExpense] = useState(false), [newExpense, setNewExpense] = useState({ title: "", subtitle: "", amount: 0 }), [savingExpense, setSavingExpense] = useState(false);
 const [editingExpenseId, setEditingExpenseId] = useState(null), [editExpenseDraft, setEditExpenseDraft] = useState({ title: "", subtitle: "", amount: 0 });
 const range = useMemo(() => { if (period === "day") return { start: new Date(selectedDay), end: new Date(selectedDay) }; if (period === "month") return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) }; const s = new Date(selectedWeek), e = new Date(s); e.setDate(s.getDate() + 6); return { start: s, end: e }; }, [period, selectedDay, selectedWeek, selectedMonth]);
 
 useEffect(() => { if (!user) return; let dead = false; getProfile(user.id).then(p => { if (!dead) setSchedule(p?.working_hours || null); }).catch(() => {}); return () => { dead = true; }; }, [user]);
-useEffect(() => { let cancelled = false; setStatus("loading"); Promise.all([getAppointmentsRange(range.start, range.end), getExpensesRange(range.start, range.end)]).then(([a, e]) => { if (!cancelled) { setAppts(a); setExpenses(e); setStatus("ready"); } }).catch(() => { if (!cancelled) setStatus("error"); }); return () => { cancelled = true; }; }, [range]);
+useEffect(() => {
+  let cancelled = false;
+  setStatus("loading");
+  Promise.all([getAppointmentsRange(range.start, range.end), getExpensesRange(range.start, range.end)])
+    .then(async ([a, e]) => {
+      const finance = await getCertificateFinanceRange(range.start, range.end, (a || []).map((x) => x.id));
+      if (!cancelled) {
+        setAppts(a);
+        setExpenses(e);
+        setCertificateFinance(finance);
+        setStatus("ready");
+      }
+    })
+    .catch(() => { if (!cancelled) setStatus("error"); });
+  return () => { cancelled = true; };
+}, [range]);
 
 function shiftDay(delta) { setSelectedDay(c => { const d = new Date(c); d.setDate(d.getDate() + delta); return d; }); }
 function shiftWeek(delta) { setSelectedWeek(c => { const d = new Date(c); d.setDate(d.getDate() + delta * 7); return d; }); }
@@ -66,14 +82,62 @@ function handleMonthChange(v) { if (!v) return; const [y, m] = v.split("-").map(
 function formatMonthTitle() { return `${MONTH_LABELS[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`; }
 const weekPickerDays = useMemo(() => { const first = startOfWeek(weekPickerMonth), days = [], cursor = new Date(first); for (let i = 0; i < 42; i++) { days.push(new Date(cursor)); cursor.setDate(cursor.getDate() + 1); } return days; }, [weekPickerMonth]);
 const doneAppts = appts.filter(a => a.status === "done");
-const income = doneAppts.reduce((s, a) => s + Number(a.price || 0), 0);
+const certificatePaidIds = useMemo(() => new Set((certificateFinance.certificatePaidAppointmentIds || []).map(Number)), [certificateFinance.certificatePaidAppointmentIds]);
+const cashServiceAppts = doneAppts.filter((a) => !certificatePaidIds.has(Number(a.id)));
+const serviceIncome = cashServiceAppts.reduce((s, a) => s + Number(a.price || 0), 0);
+const certificateSalesIncome = (certificateFinance.sales || []).reduce((s, row) => s + Number(row.sale_price || 0), 0);
+const certificateTopupIncome = (certificateFinance.redemptions || []).reduce((s, row) => s + Number(row.topup_amount || 0), 0);
+const income = serviceIncome + certificateSalesIncome + certificateTopupIncome;
 const expenseTotal = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
 const profit = income - expenseTotal;
-const avgCheck = doneAppts.length ? Math.round(income / doneAppts.length) : 0;
+const revenueOperationCount = cashServiceAppts.length
+  + (certificateFinance.sales || []).filter((row) => Number(row.sale_price || 0) > 0).length
+  + (certificateFinance.redemptions || []).filter((row) => Number(row.topup_amount || 0) > 0).length;
+const avgCheck = revenueOperationCount ? Math.round(income / revenueOperationCount) : 0;
 const monthlyWork = period === "month" ? scheduleForMonth(schedule, selectedMonth) : null;
-const chartDays = useMemo(() => { const days = [], cursor = new Date(range.start); while (cursor <= range.end && days.length < 31) { const dStr = fmtDate(cursor), dayIncome = appts.filter(a => a.status === "done" && a.date === dStr).reduce((s, a) => s + Number(a.price || 0), 0); days.push({ label: period === "month" ? String(cursor.getDate()) : WEEKDAY_LABELS[(cursor.getDay() + 6) % 7], income: dayIncome }); cursor.setDate(cursor.getDate() + 1); } return days; }, [appts, range, period]);
+const chartDays = useMemo(() => {
+  const days = [], cursor = new Date(range.start);
+  while (cursor <= range.end && days.length < 31) {
+    const dStr = fmtDate(cursor);
+    const regular = appts
+      .filter((a) => a.status === "done" && a.date === dStr && !certificatePaidIds.has(Number(a.id)))
+      .reduce((s, a) => s + Number(a.price || 0), 0);
+    const sales = (certificateFinance.sales || [])
+      .filter((row) => row.sale_date === dStr)
+      .reduce((s, row) => s + Number(row.sale_price || 0), 0);
+    const topups = (certificateFinance.redemptions || [])
+      .filter((row) => row.redemption_date === dStr)
+      .reduce((s, row) => s + Number(row.topup_amount || 0), 0);
+    days.push({ label: period === "month" ? String(cursor.getDate()) : WEEKDAY_LABELS[(cursor.getDay() + 6) % 7], income: regular + sales + topups });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}, [appts, range, period, certificateFinance.sales, certificateFinance.redemptions, certificatePaidIds]);
 const maxVal = Math.max(...chartDays.map(d => d.income), 1);
-const transactions = useMemo(() => { const fromAppts = doneAppts.map(a => ({ id: `a${a.id}`, type: "income", title: a.clients?.name || "Клиент удалён", subtitle: a.services?.name || "", amount: Number(a.price || 0), date: a.date, time: a.start_time, clientId: a.clients?.id })); const fromExpenses = expenses.map(e => ({ id: `e${e.id}`, type: "expense", expenseId: e.id, title: e.title, subtitle: e.subtitle, amount: Number(e.amount || 0), date: e.date, time: "" })); return [...fromAppts, ...fromExpenses].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.time || "").localeCompare(a.time || "")); }, [doneAppts, expenses]);
+const transactions = useMemo(() => {
+  const fromAppts = cashServiceAppts.map((a) => ({
+    id: `a${a.id}`, type: "income", title: a.clients?.name || "Клиент удалён", subtitle: a.services?.name || "",
+    amount: Number(a.price || 0), date: a.date, time: a.start_time, clientId: a.clients?.id,
+  }));
+  const fromCertificateSales = (certificateFinance.sales || []).filter((row) => Number(row.sale_price || 0) > 0).map((row) => ({
+    id: `cs${row.id}`, type: "income",
+    title: `Продажа ${row.kind === "sessions" ? "абонемента" : "сертификата"} ${row.number}`,
+    subtitle: [row.services?.name, row.sale_method].filter(Boolean).join(" · "),
+    amount: Number(row.sale_price || 0), date: row.sale_date, time: "", clientId: row.clients?.id,
+  }));
+  const fromCertificateTopups = (certificateFinance.redemptions || []).filter((row) => Number(row.topup_amount || 0) > 0).map((row) => ({
+    id: `ct${row.id}`, type: "income",
+    title: row.appointments?.clients?.name || "Доплата по сертификату",
+    subtitle: `Доплата по ${row.certificates?.number || "сертификату"} · ${row.topup_method || ""}`,
+    amount: Number(row.topup_amount || 0), date: row.redemption_date, time: row.appointments?.start_time || "", clientId: row.appointments?.clients?.id,
+  }));
+  const fromExpenses = expenses.map((e) => ({
+    id: `e${e.id}`, type: "expense", expenseId: e.id, title: e.title, subtitle: e.subtitle,
+    amount: Number(e.amount || 0), date: e.date, time: "",
+  }));
+  return [...fromAppts, ...fromCertificateSales, ...fromCertificateTopups, ...fromExpenses]
+    .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.time || "").localeCompare(a.time || ""));
+}, [cashServiceAppts, certificateFinance.sales, certificateFinance.redemptions, expenses]);
 
 async function handleAddExpense() { if (!newExpense.title.trim()) return; setSavingExpense(true); try { const created = await createExpense(newExpense); setExpenses(p => [created, ...p]); setNewExpense({ title: "", subtitle: "", amount: 0 }); setShowAddExpense(false); } catch { window.alert("Не удалось сохранить расход. Проверь подключение."); } finally { setSavingExpense(false); } }
 function startEditExpense(t) { setEditingExpenseId(t.expenseId); setEditExpenseDraft({ title: t.title, subtitle: t.subtitle, amount: t.amount }); }

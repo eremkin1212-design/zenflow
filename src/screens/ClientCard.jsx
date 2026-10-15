@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, MessageCircle, Plus, CalendarCheck, Ban, Wallet, Clock, Image as ImageIcon, Trash2, TrendingUp, Pencil } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, Plus, CalendarCheck, Ban, Wallet, Clock, Trash2, TrendingUp, Pencil } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import ClientNotes from "../components/ClientNotes";
@@ -13,7 +13,6 @@ const TABS = [
   { key: "history", label: "История" },
   { key: "payments", label: "Оплаты" },
   { key: "notes", label: "Заметки" },
-  { key: "photos", label: "Фото" },
   { key: "recs", label: "Рекомендации" },
 ];
 
@@ -222,7 +221,6 @@ export default function ClientCard() {
           </div>}
 
           {tab === "notes" && <ClientNotes clientId={client.id} />}
-          {tab === "photos" && <div className="grid grid-cols-3 gap-2.5">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="rounded-2xl aspect-square flex items-center justify-center bg-[var(--surface-alt)] border border-[var(--line)]"><ImageIcon size={20} className="text-[var(--ink-soft)]" /></div>)}<button className="rounded-2xl aspect-square flex items-center justify-center border border-dashed border-[var(--line)]" aria-label="Добавить фото"><Plus size={20} className="text-[var(--moss)]" /></button></div>}
           {tab === "recs" && <div className="rounded-2xl p-4 bg-[var(--surface)] border border-[var(--line)]"><div className="text-sm leading-relaxed">{rec}</div><button className="mt-3 text-sm font-medium text-[var(--moss)]">Изменить рекомендации</button></div>}
         </div>
         {!editingClient && <BottomNav />}

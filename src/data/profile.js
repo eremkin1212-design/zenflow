@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { cacheResource, getCachedResource } from "./offlineStore";
 
 function minutes(value) {
   const [h, m] = String(value || "00:00").split(":").map(Number);
@@ -56,9 +57,17 @@ async function applyAppointmentWorkHours(profile) {
 }
 
 export async function getProfile(userId) {
-  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
-  if (error) throw error;
-  return applyAppointmentWorkHours(data);
+  try {
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+    if (error) throw error;
+    const result = await applyAppointmentWorkHours(data);
+    if (result) cacheResource(userId, "profile", result);
+    return result;
+  } catch (error) {
+    const cached = getCachedResource(userId, "profile", null);
+    if (cached) return cached;
+    throw error;
+  }
 }
 
 export async function updateProfile(userId, fields) {

@@ -16,6 +16,7 @@ create table if not exists public.certificates (
   remaining_sessions integer not null default 0 check (remaining_sessions >= 0),
   expires_at date,
   note text,
+  sale_price integer not null default 0 check (sale_price >= 0),
   status text not null default 'active' check (status in ('active','used','cancelled')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -169,7 +170,7 @@ begin
   if not found then raise exception 'Сертификат не найден'; end if;
 
   if v_cert.status <> 'active' then raise exception 'Сертификат уже использован или отменён'; end if;
-  if v_cert.expires_at is not null and v_cert.expires_at < current_date then raise exception 'Срок действия сертификата истёк'; end if;
+  if v_cert.expires_at is not null and v_cert.expires_at < timezone('Asia/Novosibirsk', now())::date then raise exception 'Срок действия сертификата истёк'; end if;
   if v_cert.client_id is not null and v_cert.client_id <> v_appointment.client_id then raise exception 'Сертификат привязан к другому клиенту'; end if;
 
   select count(*), max(aps.service_id)

@@ -15,6 +15,7 @@ import Settings from "./screens/Settings";
 import Support from "./screens/Support";
 import SupportConversation from "./screens/SupportConversation";
 import SupportAdmin from "./screens/SupportAdmin";
+import OfflineSyncBridge from "./components/OfflineSyncBridge";
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -51,6 +52,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <OfflineSyncBridge />
         <BrowserRouter>
           <Routed />
         </BrowserRouter>

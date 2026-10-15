@@ -54,13 +54,7 @@ export async function getAppointmentsRange(startDate,endDate){
     const {data,error}=await withTimeout(supabase.from("appointments").select(SELECT).gte("date",startKey).lte("date",endKey).order("date").order("start_time"),5000);
     if(error)throw error;
     const remote=data||[];
-    if(ownerId){
-      cacheAppointments(ownerId,remote);
-      const remoteOfflineIds=new Set(remote.map(a=>a.offline_id).filter(Boolean));
-      for(const item of getPendingAppointments(ownerId)){
-        if(remoteOfflineIds.has(item.offlineId)) removePendingAppointment(ownerId,item.offlineId);
-      }
-    }
+    if(ownerId) cacheAppointments(ownerId,remote);
     const remoteOfflineIds=new Set(remote.map(a=>a.offline_id).filter(Boolean));
     return sortAppointments([...remote,...pending.filter(a=>!remoteOfflineIds.has(a.offline_id))]);
   }catch(error){

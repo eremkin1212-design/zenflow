@@ -220,6 +220,12 @@ export async function completeAppointment(appointment,method,options={}){
     }
   );
 
+  // Если запись была создана до появления list_price, сохраняем исходную
+  // стоимость, чтобы индивидуальная цена не стирала цену общего прайса.
+  if(appointment.list_price==null){
+    await supabase.from("appointments").update({list_price:currentPrice}).eq("id",appointment.id);
+  }
+
   // Для одной услуги синхронизируем цену строки услуги с фактической
   // стоимостью визита, чтобы карточка клиента не показывала старую сумму.
   const {data:serviceRows,error:serviceRowsError}=await supabase

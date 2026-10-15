@@ -10,6 +10,7 @@ import { getClients, getClientById, createClient } from "../data/clients";
 import { getClientBalance } from "../data/clientBalance";
 import { getAppointmentById, getAppointmentServices, getAppointmentPayment, updateAppointmentPayment, createAppointmentOfflineReady, updateAppointment, saveAppointmentServices, completeAppointmentWithBalance, fmtDate } from "../data/appointments";
 import { canPickPhoneContact, isContactPickerCancel, pickPhoneContact } from "../lib/contactPicker";
+import { clearClientServicePrice, getClientServicePrices, setClientServicePrice } from "../data/clientServicePrices";
 
 const WEEKDAYS=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 const KEYS=["mon","tue","wed","thu","fri","sat","sun"];
@@ -26,21 +27,58 @@ export default function AppointmentForm(){
  const {mode}=useParams(); const id=mode==="new"?null:mode; const [params]=useSearchParams(); const navigate=useNavigate(); const today=useMemo(()=>new Date(),[]);
  const [services,setServices]=useState([]),[clients,setClients]=useState([]),[hours,setHours]=useState(null),[client,setClient]=useState(null),[selectedServices,setSelectedServices]=useState([]),[date,setDate]=useState(today),[timeMin,setTimeMin]=useState(600),[notes,setNotes]=useState(""),[payment,setPayment]=useState(null),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(""),[query,setQuery]=useState(""),[quick,setQuick]=useState(false),[quickName,setQuickName]=useState(""),[quickPhone,setQuickPhone]=useState(""),[pickingQuickContact,setPickingQuickContact]=useState(false);
  const [serviceQuery,setServiceQuery]=useState(""),[extraSlots,setExtraSlots]=useState([]);
+ const [clientPrices,setClientPrices]=useState({}),[appointmentPrice,setAppointmentPrice]=useState("0"),[priceTouched,setPriceTouched]=useState(false),[rememberPrice,setRememberPrice]=useState(false);
  const [clientBalance,setClientBalance]=useState(0),[payOpen,setPayOpen]=useState(false),[payMethod,setPayMethod]=useState("Наличные"),[cashReceived,setCashReceived]=useState(""),[useBalance,setUseBalance]=useState(true),[keepChange,setKeepChange]=useState(false);
  const monday=useMemo(()=>{const x=startOfWeek(today);x.setDate(x.getDate()+weekDiff(today,date)*7);return x},[today,date]); const week=useMemo(()=>Array.from({length:7},(_,i)=>addDays(monday,i)),[monday]);
- const duration=selectedServices.reduce((s,x)=>s+Number(x.duration||0),0),price=selectedServices.reduce((s,x)=>s+Number(x.price||0),0); const filtered=clients.filter(c=>c.name.toLowerCase().includes(query.toLowerCase())).slice(0,7);
+ const duration=selectedServices.reduce((s,x)=>s+Number(x.duration||0),0);
+ const calculatedPrice=selectedServices.reduce((s,x)=>s+Number(x.price||0),0);
+ const listPrice=selectedServices.reduce((s,x)=>s+Number(x.basePrice??x.price??0),0);
+ const price=Math.max(0,Math.round(Number(appointmentPrice)||0));
+ const filtered=clients.filter(c=>c.name.toLowerCase().includes(query.toLowerCase())).slice(0,7);
  const serviceNames=selectedServices.map(s=>s.name).filter(Boolean);
  const appointmentCount=1+extraSlots.length;
- useEffect(()=>{let dead=false;const cid=params.get("client");Promise.all([getServices(),getClients(),id?getAppointmentById(id):Promise.resolve(null),id?getAppointmentServices(id):Promise.resolve([]),id?getAppointmentPayment(id):Promise.resolve(null),!id&&cid?getClientById(cid):Promise.resolve(null)]).then(([sv,cl,a,as,p,linkedClient])=>{if(dead)return;setServices(sv);setClients(cl);if(a){if(a.clients)setClient({id:a.clients.id,name:a.clients.name});setDate(new Date(`${a.date}T12:00:00`));setTimeMin(timeToMin(a.start_time));setNotes(a.notes||"");setPayment(p);if(as?.length)setSelectedServices(as.map(x=>({id:x.service_id,duration:x.duration,price:x.price,name:x.services?.name,color:x.services?.color})));else if(a.services)setSelectedServices([a.services]);}else{const qd=params.get("date"),qt=params.get("time");if(qd)setDate(new Date(`${qd}T12:00:00`));if(qt)setTimeMin(timeToMin(qt));if(linkedClient)setClient({id:linkedClient.id,name:linkedClient.name});else if(cid){const c=cl.find(x=>String(x.id)===cid);if(c)setClient({id:c.id,name:c.name})}}setLoading(false)}).catch(()=>{if(!dead){setError("Не удалось загрузить данные");setLoading(false)}});return()=>{dead=true}},[id,params]);
+ const singleService=selectedServices.length===1?selectedServices[0]:null;
+ const savedPersonalPrice=singleService&&client?clientPrices[String(singleService.id)]:undefined;
+ const baseSinglePrice=singleService?Number(singleService.basePrice??singleService.price??0):0;
+ const defaultSinglePrice=savedPersonalPrice!==undefined?Number(savedPersonalPrice):baseSinglePrice;
+ const personalPriceChanged=Boolean(singleService&&client)&&price!==defaultSinglePrice;
+ useEffect(()=>{let dead=false;const cid=params.get("client");Promise.all([getServices(),getClients(),id?getAppointmentById(id):Promise.resolve(null),id?getAppointmentServices(id):Promise.resolve([]),id?getAppointmentPayment(id):Promise.resolve(null),!id&&cid?getClientById(cid):Promise.resolve(null)]).then(([sv,cl,a,as,p,linkedClient])=>{if(dead)return;setServices(sv);setClients(cl);if(a){if(a.clients)setClient({id:a.clients.id,name:a.clients.name});setDate(new Date(`${a.date}T12:00:00`));setTimeMin(timeToMin(a.start_time));setNotes(a.notes||"");setPayment(p);if(as?.length)setSelectedServices(as.map(x=>({id:x.service_id,duration:x.duration,price:Number(x.price??x.services?.price??0),basePrice:Number(x.services?.price??x.price??0),name:x.services?.name,color:x.services?.color})));else if(a.services)setSelectedServices([{...a.services,price:Number(a.price??a.services.price??0),basePrice:Number(a.services.price??a.price??0)}]);setAppointmentPrice(String(Number(a.price||0)));setPriceTouched(true);}else{const qd=params.get("date"),qt=params.get("time");if(qd)setDate(new Date(`${qd}T12:00:00`));if(qt)setTimeMin(timeToMin(qt));if(linkedClient)setClient({id:linkedClient.id,name:linkedClient.name});else if(cid){const c=cl.find(x=>String(x.id)===cid);if(c)setClient({id:c.id,name:c.name})}}setLoading(false)}).catch(()=>{if(!dead){setError("Не удалось загрузить данные");setLoading(false)}});return()=>{dead=true}},[id,params]);
  const {user}=useAuth();
  useEffect(()=>{if(!user)return;let dead=false;getProfile(user.id).then(p=>{if(!dead)setHours(p?.working_hours||null)}).catch(()=>{});return()=>{dead=true}},[user]);
  useEffect(()=>{let dead=false;if(!client?.id){setClientBalance(0);return()=>{dead=true}}getClientBalance(client.id).then(v=>{if(!dead)setClientBalance(v)}).catch(()=>{if(!dead)setClientBalance(0)});return()=>{dead=true}},[client?.id]);
+ useEffect(()=>{
+  let dead=false;
+  setRememberPrice(false);
+  if(!client?.id){setClientPrices({});return()=>{dead=true}}
+  getClientServicePrices(client.id).then(map=>{
+   if(dead)return;
+   setClientPrices(map||{});
+   if(!id){
+    setSelectedServices(prev=>prev.map(s=>{
+     const catalog=services.find(x=>String(x.id)===String(s.id));
+     const base=Number(s.basePrice??catalog?.price??s.price??0);
+     const personal=map?.[String(s.id)];
+     return {...s,basePrice:base,price:personal!==undefined?Number(personal):base};
+    }));
+    setPriceTouched(false);
+   }
+  }).catch(()=>{if(!dead)setClientPrices({})});
+  return()=>{dead=true}
+ },[client?.id,id,services]);
+ useEffect(()=>{if(!priceTouched)setAppointmentPrice(String(calculatedPrice));},[calculatedPrice,priceTouched]);
+ useEffect(()=>{if(!personalPriceChanged)setRememberPrice(false);},[personalPriceChanged]);
  const stripRef=useRef(null),stripReady=useRef(false);
  const [stripBase,setStripBase]=useState(()=>addDays(startOfWeek(new Date()),-28));
  const stripDates=useMemo(()=>Array.from({length:240},(_,i)=>addDays(stripBase,i)),[stripBase]);
  useEffect(()=>{const key=fmtDate(date);if(key<fmtDate(stripDates[0])||key>fmtDate(stripDates[stripDates.length-1])){setStripBase(addDays(startOfWeek(date),-28));return}const el=stripRef.current?.querySelector(`[data-d="${key}"]`);el?.scrollIntoView({inline:"center",block:"nearest",behavior:stripReady.current?"smooth":"auto"});if(el)stripReady.current=true},[date,stripDates,loading]);
  const visibleServices=useMemo(()=>{const q=serviceQuery.trim().toLowerCase();if(!q)return services;return services.filter(s=>String(s.name||"").toLowerCase().includes(q)||selectedServices.some(x=>x.id===s.id));},[services,serviceQuery,selectedServices]);
- function toggleService(s){setSelectedServices(prev=>prev.some(x=>x.id===s.id)?prev.filter(x=>x.id!==s.id):[...prev,{id:s.id,name:s.name,color:s.color,duration:s.duration,price:s.price}])}
+ function toggleService(s){
+  setPriceTouched(false);
+  setRememberPrice(false);
+  setSelectedServices(prev=>prev.some(x=>x.id===s.id)
+   ?prev.filter(x=>x.id!==s.id)
+   :[...prev,{id:s.id,name:s.name,color:s.color,duration:s.duration,basePrice:Number(s.price||0),price:clientPrices[String(s.id)]!==undefined?Number(clientPrices[String(s.id)]):Number(s.price||0)}]);
+ }
  function addExtraSlot(){
   setExtraSlots(prev=>{
    const last=prev[prev.length-1];
@@ -76,18 +114,19 @@ export default function AppointmentForm(){
   if(new Set(slotKeys).size!==slotKeys.length){setError("Одинаковая дата и время выбраны несколько раз");return}
   setSaving(true);
   try{
-   const basePayload={client_id:client.id,service_id:selectedServices[0].id,duration,price,notes};
+   const servicesForSave=selectedServices.length===1?[{...selectedServices[0],price}]:selectedServices;
+   const basePayload={client_id:client.id,service_id:selectedServices[0].id,duration,price,full_price:price,list_price:listPrice,notes};
    let a;
    const clientMeta=clients.find(c=>String(c.id)===String(client.id))||client;
    if(id){
     a=await updateAppointment(id,{...basePayload,date:fmtDate(date),start_time:minToTime(timeMin)});
-    await saveAppointmentServices(a.id,selectedServices);
+    await saveAppointmentServices(a.id,servicesForSave);
 
     let forceQueue=typeof navigator!=="undefined"&&navigator.onLine===false;
     for(const slot of extraSlots){
      const added=await createAppointmentOfflineReady(
       {...basePayload,date:slot.date,start_time:slot.time,status:"planned"},
-      selectedServices,
+      servicesForSave,
       {client:clientMeta,forceQueue}
      );
      if(added?._offline) forceQueue=true;
@@ -97,13 +136,23 @@ export default function AppointmentForm(){
     for(const slot of slots){
      a=await createAppointmentOfflineReady(
       {...basePayload,date:slot.date,start_time:slot.time,status:"planned"},
-      selectedServices,
+      servicesForSave,
       {client:clientMeta,forceQueue}
      );
      if(a?._offline) forceQueue=true;
     }
    }
+   let pricePreferenceError=false;
+   if(rememberPrice&&singleService&&client){
+    try{
+     if(price===baseSinglePrice) await clearClientServicePrice(client.id,singleService.id);
+     else await setClientServicePrice(client.id,singleService.id,price);
+    }catch{
+     pricePreferenceError=true;
+    }
+   }
    if(payment)await updateAppointmentPayment(payment.id,price);
+   if(pricePreferenceError)window.alert("Запись сохранена, но персональную цену клиента запомнить не удалось.");
    navigate("/calendar");
   }catch{
    setError("Не удалось сохранить запись");
@@ -123,6 +172,13 @@ export default function AppointmentForm(){
   {payment&&<div className="mx-5 mt-4 rounded-2xl p-3 bg-[var(--moss-soft)] text-sm"><div className="flex items-center justify-between"><span className="font-medium">Оплачено</span><span className="font-mono">{Number(payment.amount).toLocaleString("ru-RU")} ₽</span></div><div className="text-xs mt-1 text-[var(--ink-soft)]">{payment.method}</div><div className="mt-2 pt-2 border-t border-[var(--line)]"><div className="text-xs font-medium mb-1">Услуги</div><div className="text-xs text-[var(--ink-soft)]">{serviceNames.length ? serviceNames.join(" · ") : "Услуги не найдены"}</div><div className="text-xs mt-1 text-[var(--ink-soft)]">{selectedServices.length} {selectedServices.length===1?"услуга":"услуг"} · {duration} мин</div></div><div className="text-xs mt-2 text-[var(--ink-soft)]">Оплата сохраняется даже при изменении даты, времени или состава услуг.</div></div>}
   <div className="mx-5 mt-5"><div className="text-sm font-medium mb-2 text-[var(--ink-soft)]">Клиент</div>{client?<div className="rounded-2xl p-3.5 flex justify-between bg-[var(--moss-soft)]"><div className="text-sm font-medium">{client.name}<div className="mt-1 text-xs text-[var(--ink-soft)]">Баланс: {clientBalance.toLocaleString("ru-RU")} ₽</div><div className="mt-1.5"><HighlightsBanner text={clients.find((c) => c.id === client.id)?.highlights} compact /></div></div><button onClick={()=>setClient(null)} className="text-xs text-[var(--moss)]">Изменить</button></div>:<><div className="flex items-center gap-2 rounded-2xl px-3.5 py-2.5 bg-[var(--surface)] border border-[var(--line)]"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Поиск клиента" className="flex-1 bg-transparent outline-none text-sm"/></div><div className="flex gap-2 mt-2 overflow-x-auto">{filtered.map(c=><button key={c.id} onClick={()=>setClient({id:c.id,name:c.name})} className="shrink-0 rounded-full px-3 py-2 text-sm bg-[var(--surface-alt)]">{c.name}</button>)}<button onClick={()=>setQuick(true)} className="shrink-0 rounded-full px-3 py-2 text-sm border border-dashed border-[var(--line)]"><Plus size={14} className="inline"/> Новый</button></div>{quick&&<div className="mt-2 rounded-2xl p-3 bg-[var(--surface)] border border-[var(--line)]">{canPickPhoneContact()&&<button type="button" onClick={pickQuickContact} disabled={pickingQuickContact} className="w-full rounded-xl p-2.5 mb-2 flex items-center justify-center gap-2 bg-[var(--moss-soft)] text-sm font-medium" style={{opacity:pickingQuickContact?.6:1}}><UserPlus size={15}/>{pickingQuickContact?"Открываем контакты…":"Выбрать из контактов"}</button>}<input value={quickName} onChange={e=>setQuickName(e.target.value)} placeholder="Имя" className="w-full rounded-xl p-2 mb-2 bg-[var(--surface-alt)] outline-none"/><input value={quickPhone} onChange={e=>setQuickPhone(e.target.value)} placeholder="Телефон" className="w-full rounded-xl p-2 mb-2 bg-[var(--surface-alt)] outline-none"/><div className="flex gap-2"><button onClick={()=>setQuick(false)} className="flex-1 rounded-full py-2 bg-[var(--surface-alt)]">Отмена</button><button onClick={addQuick} disabled={pickingQuickContact} className="flex-1 rounded-full py-2 bg-[var(--moss)] text-[var(--on-accent)]" style={{opacity:pickingQuickContact?.6:1}}>Сохранить</button></div></div>}</>}</div>
   <div className="mx-5 mt-5"><div className="text-sm font-medium mb-2 text-[var(--ink-soft)]">Услуги <span className="text-xs">· можно выбрать несколько</span></div>{services.length > 6 && <div className="flex items-center gap-2 rounded-2xl px-3 py-2 mb-2.5 bg-[var(--surface)] border border-[var(--line)]"><Search size={15} className="text-[var(--ink-soft)]" /><input value={serviceQuery} onChange={(e) => setServiceQuery(e.target.value)} placeholder="Поиск услуги" className="flex-1 bg-transparent outline-none text-sm" />{serviceQuery && <button onClick={() => setServiceQuery("")} aria-label="Очистить" className="p-1"><X size={14} className="text-[var(--ink-soft)]" /></button>}</div>}<div className="grid grid-cols-2 gap-2.5">{visibleServices.map(s=>{const active=selectedServices.some(x=>x.id===s.id);return <button key={s.id} onClick={()=>toggleService(s)} className="rounded-2xl p-3 text-left border" style={{background:active?`${s.color}26`:"var(--surface)",borderColor:active?s.color:"var(--line)"}}><span className="w-2.5 h-2.5 rounded-full inline-block" style={{background:s.color}}/><div className="text-sm font-medium mt-1">{s.name}</div><div className="text-xs text-[var(--ink-soft)]">{s.duration} мин · {s.price.toLocaleString("ru-RU")} ₽</div>{active&&<div className="text-[11px] mt-1 text-[var(--moss)]">Выбрано</div>}</button>})}</div>{selectedServices.length>0&&<div className="rounded-2xl p-3 mt-3 bg-[var(--surface-alt)] text-sm flex justify-between"><span>{selectedServices.length} услуг · {duration} мин</span><b>{price.toLocaleString("ru-RU")} ₽</b></div>}</div>
+  {selectedServices.length>0&&<div className="mx-5 mt-4 rounded-2xl p-4 bg-[var(--surface)] border border-[var(--line)]">
+   <div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium">Стоимость записи</div><div className="text-xs mt-0.5 text-[var(--ink-soft)]">Можно изменить только для этой записи</div></div>{listPrice!==price&&<div className="text-xs text-[var(--ink-soft)]">Обычно {listPrice.toLocaleString("ru-RU")} ₽</div>}</div>
+   <div className="mt-3 flex items-center gap-2"><input inputMode="numeric" value={appointmentPrice} onChange={e=>{setAppointmentPrice(e.target.value.replace(/[^0-9]/g,""));setPriceTouched(true);setRememberPrice(false)}} className="min-w-0 flex-1 rounded-xl px-3.5 py-3 bg-[var(--surface-alt)] border border-[var(--line)] font-mono text-lg outline-none"/><span className="font-medium">₽</span></div>
+   {singleService&&client&&savedPersonalPrice!==undefined&&!personalPriceChanged&&<div className="mt-2 text-xs text-[var(--moss)]">Для этого клиента сохранена персональная цена {Number(savedPersonalPrice).toLocaleString("ru-RU")} ₽</div>}
+   {personalPriceChanged&&<label className="mt-3 flex items-start gap-2.5 cursor-pointer"><input type="checkbox" checked={rememberPrice} onChange={e=>setRememberPrice(e.target.checked)} className="w-5 h-5 mt-0.5"/><span className="text-sm"><span className="font-medium">{price===baseSinglePrice&&savedPersonalPrice!==undefined?"Вернуть обычную цену для клиента":"Запомнить эту цену для клиента"}</span><span className="block text-xs mt-0.5 text-[var(--ink-soft)]">{price===baseSinglePrice&&savedPersonalPrice!==undefined?"В следующих записях снова будет цена из общего прайса.":"В следующих записях по этой услуге цена подставится автоматически."}</span></span></label>}
+   {selectedServices.length>1&&price!==calculatedPrice&&<div className="mt-2 text-xs text-[var(--ink-soft)]">Для набора из нескольких услуг эта сумма изменит только общую стоимость записи; персональную цену можно запомнить, когда выбрана одна услуга.</div>}
+  </div>}
   <div className="mx-5 mt-5"><div className="flex items-center justify-between mb-3"><button onClick={()=>setDate(x=>addDays(x,-1))} className="p-2 rounded-full bg-[var(--surface-alt)]"><ChevronLeft size={17}/></button><div className="text-sm font-medium capitalize">{date.toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"})}</div><button onClick={()=>setDate(x=>addDays(x,1))} className="p-2 rounded-full bg-[var(--surface-alt)]"><ChevronRight size={17}/></button></div><div ref={stripRef} className="zf-strip flex gap-1 overflow-x-auto" style={{scrollbarWidth:"none"}}>{stripDates.map(sd=>{const active=sd.toDateString()===date.toDateString();const isToday=sd.toDateString()===new Date().toDateString();const work=isWorkingDate(hours,sd);const first=sd.getDate()===1;return <button key={sd.toISOString()} data-d={fmtDate(sd)} onClick={()=>setDate(sd)} className="shrink-0 w-10 rounded-xl py-2 flex flex-col items-center gap-0.5" style={{background:active?"var(--moss)":"transparent",color:active?"var(--on-accent)":"var(--ink-soft)"}}><span className="text-[10px] uppercase">{first?sd.toLocaleDateString("ru-RU",{month:"short"}).replace(".",""):WEEKDAYS[(sd.getDay()+6)%7]}</span><span className="text-sm font-medium" style={{color:active?"inherit":isToday?"var(--clay)":"var(--ink)"}}>{sd.getDate()}</span><span className="w-1 h-1 rounded-full" style={{background:work?(active?"var(--on-accent)":"var(--moss)"):"transparent"}}/></button>})}</div><style>{`.zf-strip::-webkit-scrollbar{display:none}`}</style><div className="mt-3 flex items-center gap-2"><input type="time" value={minToTime(timeMin)} onChange={e=>setTimeMin(timeToMin(e.target.value))} className="flex-1 rounded-xl p-3 bg-[var(--surface)] border border-[var(--line)] font-mono"/><button onClick={()=>setDate(new Date())} className="rounded-xl px-3 py-3 bg-[var(--surface-alt)] text-sm">Сегодня</button></div></div>
   <div className="mx-5 mt-5">
    <div className="flex items-start justify-between gap-3 mb-3"><div><div className="text-sm font-medium text-[var(--ink-soft)]">{id?"Добавить ещё записи":"Несколько записей"}</div><div className="text-xs mt-1 text-[var(--ink-soft)]">{id?"Создать новые записи этому же клиенту на другие дни":"Один клиент и услуги, но разные даты и время"}</div></div><div className="shrink-0 rounded-full px-2.5 py-1 text-xs font-mono bg-[var(--moss-soft)] text-[var(--moss)]">{id?extraSlots.length:appointmentCount}</div></div>

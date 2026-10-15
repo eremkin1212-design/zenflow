@@ -1,6 +1,12 @@
 import { supabase } from "../lib/supabaseClient";
 import { cacheResource, getCachedResource } from "./offlineStore";
 
+function withReadTimeout(promise, ms = 5000) {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("offline read timeout")), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function minutes(value) {
   const [h, m] = String(value || "00:00").split(":").map(Number);
   return h * 60 + m;
@@ -58,9 +64,10 @@ async function applyAppointmentWorkHours(profile) {
 
 export async function getProfile(userId) {
   try {
-    const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+    if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("offline");
+    const { data, error } = await withReadTimeout(supabase.from("profiles").select("*").eq("id", userId).maybeSingle());
     if (error) throw error;
-    const result = await applyAppointmentWorkHours(data);
+    const result = await withReadTimeout(applyAppointmentWorkHours(data));
     if (result) cacheResource(userId, "profile", result);
     return result;
   } catch (error) {

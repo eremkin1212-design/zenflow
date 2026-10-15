@@ -7,21 +7,24 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
   const full = Math.max(0, Math.round(Number(price) || 0));
   const [discount, setDiscount] = useState(0);
   const [customPrice, setCustomPrice] = useState(false);
-  const [serviceTotal, setServiceTotal] = useState(full);
-  const [received, setReceived] = useState(full);
+  const [serviceTotalInput, setServiceTotalInput] = useState(String(full));
+  const [receivedInput, setReceivedInput] = useState(String(full));
   const [receivedTouched, setReceivedTouched] = useState(false);
   const [rememberPrice, setRememberPrice] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const serviceTotal = serviceTotalInput === "" ? null : Math.max(0, Math.round(Number(serviceTotalInput) || 0));
+  const received = receivedInput === "" ? null : Math.max(0, Math.round(Number(receivedInput) || 0));
+
   useEffect(() => {
-    if (!receivedTouched) setReceived(serviceTotal);
-  }, [serviceTotal, receivedTouched]);
+    if (!receivedTouched) setReceivedInput(serviceTotalInput);
+  }, [serviceTotalInput, receivedTouched]);
 
   function applyDiscount(percent) {
     setCustomPrice(false);
     setRememberPrice(false);
     setDiscount(percent);
-    setServiceTotal(Math.round(full * (1 - percent / 100)));
+    setServiceTotalInput(String(Math.round(full * (1 - percent / 100))));
     setReceivedTouched(false);
   }
 
@@ -29,24 +32,33 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
     setCustomPrice(checked);
     setRememberPrice(false);
     setDiscount(0);
-    setServiceTotal(full);
-    setReceived(full);
+    setServiceTotalInput(String(full));
+    setReceivedInput(String(full));
     setReceivedTouched(false);
   }
 
   function editServiceTotal(value) {
-    const next = Math.max(0, Math.round(Number(value) || 0));
-    setServiceTotal(next);
+    const clean = String(value).replace(/[^0-9]/g, "");
+    setServiceTotalInput(clean);
     setDiscount(0);
     setReceivedTouched(false);
   }
 
   function editReceived(value) {
-    setReceived(Math.max(0, Math.round(Number(value) || 0)));
+    const clean = String(value).replace(/[^0-9]/g, "");
+    setReceivedInput(clean);
     setReceivedTouched(true);
   }
 
   async function pay(method) {
+    if (serviceTotal === null) {
+      window.alert("Укажи стоимость услуги.");
+      return;
+    }
+    if (method === "Наличные" && received === null) {
+      window.alert("Укажи, сколько получено наличными.");
+      return;
+    }
     setBusy(true);
     try {
       await onPay(method, {
@@ -60,7 +72,7 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
     }
   }
 
-  const priceChanged = serviceTotal !== full;
+  const priceChanged = serviceTotal !== null && serviceTotal !== full;
 
   return (
     <div className="rounded-2xl p-3 bg-[var(--surface)] border border-[var(--line)]">
@@ -94,10 +106,12 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
           <div className="text-xs font-medium text-[var(--ink-soft)]">Стоимость услуги</div>
           <div className="flex items-center gap-2 mt-1.5">
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
-              value={serviceTotal}
+              pattern="[0-9]*"
+              value={serviceTotalInput}
               onChange={(e) => editServiceTotal(e.target.value)}
+              placeholder="Введите сумму"
               className="flex-1 min-w-0 rounded-xl px-3 py-2.5 text-base font-mono bg-[var(--surface-alt)] outline-none border border-[var(--line)]"
             />
             <span className="text-base font-mono">₽</span>
@@ -135,7 +149,7 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
 
       {priceChanged && (
         <div className="mt-2.5 rounded-xl px-3 py-2 text-xs bg-[var(--moss-soft)] text-[var(--moss)]">
-          В финансы пойдёт {serviceTotal.toLocaleString("ru-RU")} ₽, а не {full.toLocaleString("ru-RU")} ₽.
+          В финансы пойдёт {Number(serviceTotal || 0).toLocaleString("ru-RU")} ₽, а не {full.toLocaleString("ru-RU")} ₽.
           {discount > 0 ? ` Скидка ${discount}%.` : ""}
         </div>
       )}
@@ -144,10 +158,12 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
         <div className="text-xs font-medium text-[var(--ink-soft)]">Получено наличными</div>
         <div className="flex items-center gap-2 mt-1.5">
           <input
-            type="number"
+            type="text"
             inputMode="numeric"
-            value={received}
+            pattern="[0-9]*"
+            value={receivedInput}
             onChange={(e) => editReceived(e.target.value)}
+            placeholder="Введите сумму"
             className="flex-1 min-w-0 rounded-xl px-3 py-2.5 text-base font-mono bg-[var(--surface-alt)] outline-none"
           />
           <span className="text-base font-mono">₽</span>

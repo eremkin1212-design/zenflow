@@ -4,7 +4,7 @@ import { Plus, Phone, MessageCircle, Clock, CalendarPlus, UserPlus, Check, X, Ch
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
 import PaymentSheet from "../components/PaymentSheet";
-import { getAppointmentsRange, getAppointmentById, completeAppointment, fmtDate } from "../data/appointments";
+import { getAppointmentsRange, completeAppointment, fmtDate } from "../data/appointments";
 import { getCertificateFinanceRange, redeemCertificate } from "../data/certificates";
 import { useAuth } from "../auth";
 import { getProfile } from "../data/profile";

@@ -59,6 +59,7 @@ export async function createCertificate({
   expiresAt,
   note,
   salePrice,
+  saleMethod,
 }) {
   const normalizedKind = ["amount", "service", "sessions"].includes(kind) ? kind : "amount";
   const amountValue = normalizedKind === "amount" ? Math.max(0, Math.round(Number(amount) || 0)) : 0;
@@ -78,6 +79,7 @@ export async function createCertificate({
     expires_at: expiresAt || null,
     note: String(note || "").trim() || null,
     sale_price: normalizedKind === "amount" ? amountValue : Math.max(0, Math.round(Number(salePrice) || 0)),
+    sale_method: ["Наличные", "Карта", "Другое"].includes(saleMethod) ? saleMethod : "Наличные",
   };
 
   const { data, error } = await supabase
@@ -114,4 +116,52 @@ export async function redeemCertificate({
   });
   if (error) throw error;
   return data;
+}
+
+
+function dateKey(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+export async function getCertificateFinanceRange(start, end, appointmentIds = []) {
+  const from = dateKey(start);
+  const to = dateKey(end);
+
+  const salesQuery = supabase
+    .from("certificates")
+    .select("id,number,kind,sale_price,sale_method,sale_date,created_at,client_id,clients(id,name),services(id,name)")
+    .gt("sale_price", 0)
+    .gte("sale_date", from)
+    .lte("sale_date", to)
+    .order("sale_date", { ascending: true });
+
+  const redemptionQuery = supabase
+    .from("certificate_redemptions")
+    .select("id,appointment_id,certificate_id,amount_used,sessions_used,topup_amount,topup_method,redemption_date,created_at,certificates(number,kind),appointments(id,start_time,client_id,clients(id,name),services(id,name))")
+    .gte("redemption_date", from)
+    .lte("redemption_date", to)
+    .order("redemption_date", { ascending: true });
+
+  const ids = [...new Set((appointmentIds || []).map(Number).filter(Number.isFinite))];
+  const paidIdsQuery = ids.length
+    ? supabase.from("certificate_redemptions").select("appointment_id").in("appointment_id", ids)
+    : Promise.resolve({ data: [], error: null });
+
+  const [salesResult, redemptionResult, paidIdsResult] = await Promise.all([
+    salesQuery,
+    redemptionQuery,
+    paidIdsQuery,
+  ]);
+
+  if (salesResult.error) throw salesResult.error;
+  if (redemptionResult.error) throw redemptionResult.error;
+  if (paidIdsResult.error) throw paidIdsResult.error;
+
+  return {
+    sales: salesResult.data || [],
+    redemptions: redemptionResult.data || [],
+    certificatePaidAppointmentIds: [...new Set((paidIdsResult.data || []).map((row) => Number(row.appointment_id)))],
+  };
 }

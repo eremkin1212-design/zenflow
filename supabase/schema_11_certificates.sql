@@ -17,6 +17,8 @@ create table if not exists public.certificates (
   expires_at date,
   note text,
   sale_price integer not null default 0 check (sale_price >= 0),
+  sale_date date not null default timezone('Asia/Novosibirsk', now())::date,
+  sale_method text not null default 'Наличные' check (sale_method in ('Наличные','Карта','Другое')),
   status text not null default 'active' check (status in ('active','used','cancelled')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -37,6 +39,7 @@ create table if not exists public.certificate_redemptions (
   sessions_used integer not null default 0 check (sessions_used >= 0),
   topup_amount integer not null default 0 check (topup_amount >= 0),
   topup_method text,
+  redemption_date date not null default timezone('Asia/Novosibirsk', now())::date,
   created_at timestamptz not null default now(),
   unique (certificate_id, appointment_id)
 );
@@ -116,7 +119,9 @@ with check (
 
 create index if not exists certificates_owner_status_idx on public.certificates(owner_id,status);
 create index if not exists certificates_owner_number_idx on public.certificates(owner_id,number);
+create index if not exists certificates_owner_sale_date_idx on public.certificates(owner_id,sale_date);
 create index if not exists certificate_redemptions_certificate_idx on public.certificate_redemptions(certificate_id);
+create index if not exists certificate_redemptions_owner_date_idx on public.certificate_redemptions(owner_id,redemption_date);
 
 create or replace function public.redeem_certificate_for_appointment(
   p_certificate_number text,

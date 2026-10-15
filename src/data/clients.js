@@ -76,14 +76,24 @@ async function currentOwnerId() {
   return data?.session?.user?.id || null;
 }
 
+function withReadTimeout(promise, ms = 5000) {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("offline read timeout")), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export async function getClients() {
   const ownerId = await currentOwnerId();
   try {
-    const { data, error } = await supabase.from("clients").select("*").order("id", { ascending: true });
-    if (error) throw error;
-    const ids = (data || []).map((c) => c.id);
-    const [stats, nextVisits] = await Promise.all([getAppointmentStats(ids), getNextVisits(ids)]);
-    const result = (data || []).map((c) => withStats(c, stats, nextVisits));
+    if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("offline");
+    const result = await withReadTimeout((async () => {
+      const { data, error } = await supabase.from("clients").select("*").order("id", { ascending: true });
+      if (error) throw error;
+      const ids = (data || []).map((c) => c.id);
+      const [stats, nextVisits] = await Promise.all([getAppointmentStats(ids), getNextVisits(ids)]);
+      return (data || []).map((c) => withStats(c, stats, nextVisits));
+    })());
+
     if (ownerId) cacheResource(ownerId, "clients", result);
     return result;
   } catch (error) {
@@ -96,11 +106,15 @@ export async function getClients() {
 export async function getClientById(id) {
   const ownerId = await currentOwnerId();
   try {
-    const { data, error } = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
-    if (error) throw error;
-    if (!data) return null;
-    const [stats, nextVisits] = await Promise.all([getAppointmentStats([data.id]), getNextVisits([data.id])]);
-    const result = withStats(data, stats, nextVisits);
+    if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("offline");
+    const result = await withReadTimeout((async () => {
+      const { data, error } = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const [stats, nextVisits] = await Promise.all([getAppointmentStats([data.id]), getNextVisits([data.id])]);
+      return withStats(data, stats, nextVisits);
+    })());
+    if (!result) return null;
     if (ownerId) {
       const cached = getCachedResource(ownerId, "clients", []);
       const next = [...(Array.isArray(cached) ? cached : []).filter((c) => String(c.id) !== String(result.id)), result];

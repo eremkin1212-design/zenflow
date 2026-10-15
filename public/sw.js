@@ -1,8 +1,7 @@
 // RITENA service worker.
-// Отвечает за две вещи: приложение открывается с домашнего экрана
-// и принимает пуш-уведомления, когда приложение закрыто.
+// Кэширует оболочку приложения для офлайн-работы и принимает push-уведомления.
 
-const VERSION = "ritena-v1";
+const VERSION = "ritena-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -11,7 +10,6 @@ self.addEventListener("install", () => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
-      // Чистим кэши прошлых версий, чтобы после деплоя не отдавался старый код.
       const names = await caches.keys();
       await Promise.all(names.filter((n) => n !== VERSION).map((n) => caches.delete(n)));
       await self.clients.claim();
@@ -19,24 +17,58 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Сеть в приоритете: приложение всегда свежее, кэш — только запасной вариант
-// для навигации, если интернет пропал.
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
-  if (req.mode !== "navigate") return;
+  if (req.method !== "GET") return;
 
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin || url.pathname === "/sw.js") return;
+
+  // Навигация: сначала свежая версия, при отсутствии сети — сохранённая оболочка.
+  if (req.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        try {
+          const fresh = await fetch(req);
+          if (fresh.ok) {
+            const cache = await caches.open(VERSION);
+            await cache.put("/", fresh.clone());
+          }
+          return fresh;
+        } catch {
+          const cache = await caches.open(VERSION);
+          const cached = await cache.match("/");
+          return cached || Response.error();
+        }
+      })()
+    );
+    return;
+  }
+
+  // Статические файлы Vite (JS/CSS/иконки/шрифты) сохраняем после первого
+  // успешного открытия. Это позволяет повторно открыть RITENA без интернета.
   event.respondWith(
     (async () => {
+      const cache = await caches.open(VERSION);
+      const cached = await cache.match(req);
+
+      if (cached) {
+        event.waitUntil(
+          fetch(req)
+            .then(async (fresh) => {
+              if (fresh.ok) await cache.put(req, fresh.clone());
+            })
+            .catch(() => {})
+        );
+        return cached;
+      }
+
       try {
         const fresh = await fetch(req);
-        const cache = await caches.open(VERSION);
-        cache.put("/", fresh.clone());
+        if (fresh.ok) await cache.put(req, fresh.clone());
         return fresh;
       } catch {
-        const cache = await caches.open(VERSION);
-        const cached = await cache.match("/");
-        return cached || Response.error();
+        return Response.error();
       }
     })()
   );

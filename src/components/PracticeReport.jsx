@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, Clock, Users, Scissors, ChevronRight as Arrow } from "lucide-react";
 import { getServiceBreakdown, getDoneAppointments, getVisitHistory } from "../data/reports";
 import { getProfile } from "../data/profile";
+import { getCertificateFinanceRange } from "../data/certificates";
 import { fmtDate } from "../data/appointments";
 import { useAuth } from "../auth";
 
@@ -61,17 +62,24 @@ useEffect(() => {
 if (!user) return;
 let dead = false;
 setState("loading");
+const currentStart = startOfMonth(month);
+const currentEnd = endOfMonth(month);
 const prev = startOfMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1));
+const prevEnd = endOfMonth(prev);
 Promise.all([
-getDoneAppointments(startOfMonth(month), endOfMonth(month)),
-getDoneAppointments(prev, endOfMonth(prev)),
-getServiceBreakdown(startOfMonth(month), endOfMonth(month)),
+getDoneAppointments(currentStart, currentEnd),
+getDoneAppointments(prev, prevEnd),
+getServiceBreakdown(currentStart, currentEnd),
 getVisitHistory(),
 getProfile(user.id),
 ])
-.then(([current, previous, services, history, profile]) => {
+.then(async ([current, previous, services, history, profile]) => {
+const [currentFinance, previousFinance] = await Promise.all([
+getCertificateFinanceRange(currentStart, currentEnd, current.map((a) => a.id)),
+getCertificateFinanceRange(prev, prevEnd, previous.map((a) => a.id)),
+]);
 if (dead) return;
-setData({ current, previous, services, history, schedule: profile?.working_hours || null });
+setData({ current, previous, services, history, schedule: profile?.working_hours || null, currentFinance, previousFinance });
 setState("ready");
 })
 .catch(() => { if (!dead) setState("error"); });
@@ -80,22 +88,62 @@ return () => { dead = true; };
 
 const report = useMemo(() => {
 if (!data) return null;
-const { current, previous, services, history, schedule } = data;
+const { current, previous, services, history, schedule, currentFinance, previousFinance } = data;
 
-const revenue = current.reduce((s, a) => s + Number(a.price || 0), 0);
-const prevRevenue = previous.reduce((s, a) => s + Number(a.price || 0), 0);
+const currentCertificateIds = new Set((currentFinance?.certificatePaidAppointmentIds || []).map(Number));
+const previousCertificateIds = new Set((previousFinance?.certificatePaidAppointmentIds || []).map(Number));
+const currentCashAppointments = current.filter((a) => !currentCertificateIds.has(Number(a.id)));
+const previousCashAppointments = previous.filter((a) => !previousCertificateIds.has(Number(a.id)));
+
+const currentSales = currentFinance?.sales || [];
+const currentTopups = currentFinance?.redemptions || [];
+const previousSales = previousFinance?.sales || [];
+const previousTopups = previousFinance?.redemptions || [];
+
+const revenue =
+currentCashAppointments.reduce((s, a) => s + Number(a.price || 0), 0)
++ currentSales.reduce((s, row) => s + Number(row.sale_price || 0), 0)
++ currentTopups.reduce((s, row) => s + Number(row.topup_amount || 0), 0);
+const prevRevenue =
+previousCashAppointments.reduce((s, a) => s + Number(a.price || 0), 0)
++ previousSales.reduce((s, row) => s + Number(row.sale_price || 0), 0)
++ previousTopups.reduce((s, row) => s + Number(row.topup_amount || 0), 0);
 const busyMinutes = current.reduce((s, a) => s + Number(a.duration || 0), 0);
-const avg = current.length ? revenue / current.length : 0;
-const prevAvg = previous.length ? prevRevenue / previous.length : 0;
+const currentCashOperations = currentCashAppointments.length + currentSales.filter((row) => Number(row.sale_price || 0) > 0).length + currentTopups.filter((row) => Number(row.topup_amount || 0) > 0).length;
+const previousCashOperations = previousCashAppointments.length + previousSales.filter((row) => Number(row.sale_price || 0) > 0).length + previousTopups.filter((row) => Number(row.topup_amount || 0) > 0).length;
+const avg = currentCashOperations ? revenue / currentCashOperations : 0;
+const prevAvg = previousCashOperations ? prevRevenue / previousCashOperations : 0;
 
-// Услуги
+// Денежная выручка по услугам и сертификатам.
 const byService = new Map();
+function addServiceRevenue(name, color, amount, count = 1) {
+const key = name || "Без услуги";
+const prev = byService.get(key) || { name: key, color: color || "var(--moss)", count: 0, revenue: 0 };
+prev.count += count;
+prev.revenue += Number(amount || 0);
+byService.set(key, prev);
+}
 services.forEach((row) => {
-const name = row.services?.name || "Без услуги";
-const prev = byService.get(name) || { name, color: row.services?.color || "var(--moss)", count: 0, revenue: 0 };
-prev.count += 1;
-prev.revenue += Number(row.price || 0);
-byService.set(name, prev);
+if (currentCertificateIds.has(Number(row.appointment_id))) return;
+addServiceRevenue(row.services?.name || "Без услуги", row.services?.color, row.price, 1);
+});
+currentSales.forEach((row) => {
+if (Number(row.sale_price || 0) <= 0) return;
+addServiceRevenue(
+row.services?.name || (row.kind === "sessions" ? "Абонементы" : "Сертификаты"),
+row.services?.color || "var(--moss)",
+row.sale_price,
+1
+);
+});
+currentTopups.forEach((row) => {
+if (Number(row.topup_amount || 0) <= 0) return;
+addServiceRevenue(
+row.appointments?.services?.name || "Доплаты по сертификатам",
+"var(--moss)",
+row.topup_amount,
+1
+);
 });
 const serviceList = [...byService.values()].sort((a, b) => b.revenue - a.revenue);
 const serviceTotal = serviceList.reduce((s, x) => s + x.revenue, 0);
@@ -126,12 +174,18 @@ const today = new Date();
 const daysSince = (d) => Math.floor((today - d) / 86400000);
 
 const monthRevenueByClient = new Map();
-current.forEach((a) => {
-if (!a.client_id) return;
-monthRevenueByClient.set(a.client_id, (monthRevenueByClient.get(a.client_id) || 0) + Number(a.price || 0));
-});
-const topClients = clients
-.map((c) => ({ ...c, monthRevenue: monthRevenueByClient.get(c.id) || 0 }))
+const monthClientNames = new Map(clients.map((c) => [Number(c.id), c.name]));
+function addClientRevenue(id, name, amount) {
+if (!id || Number(amount || 0) <= 0) return;
+const key = Number(id);
+monthRevenueByClient.set(key, (monthRevenueByClient.get(key) || 0) + Number(amount || 0));
+if (name) monthClientNames.set(key, name);
+}
+currentCashAppointments.forEach((a) => addClientRevenue(a.client_id, a.clients?.name, a.price));
+currentSales.forEach((row) => addClientRevenue(row.client_id || row.clients?.id, row.clients?.name, row.sale_price));
+currentTopups.forEach((row) => addClientRevenue(row.appointments?.client_id || row.appointments?.clients?.id, row.appointments?.clients?.name, row.topup_amount));
+const topClients = [...monthRevenueByClient.entries()]
+.map(([id, monthRevenue]) => ({ id, name: monthClientNames.get(id) || "Клиент", monthRevenue }))
 .filter((c) => c.monthRevenue > 0)
 .sort((a, b) => b.monthRevenue - a.monthRevenue)
 .slice(0, 5);
@@ -159,7 +213,7 @@ return (
 
 {state === "ready" && report && (
 <>
-{report.sessions === 0 ? (
+{report.sessions === 0 && report.revenue === 0 ? (
 <div className="mx-5 mt-4 rounded-2xl p-6 text-center text-sm bg-[var(--surface)] border border-[var(--line)] text-[var(--ink-soft)]">
 В этом месяце завершённых сеансов не было
 </div>

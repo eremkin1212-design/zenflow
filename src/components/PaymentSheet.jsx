@@ -47,10 +47,6 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
   }
 
   async function pay(method) {
-    if (method === "Наличные" && received < serviceTotal) {
-      window.alert(`Получено ${received.toLocaleString("ru-RU")} ₽, а стоимость сеанса ${serviceTotal.toLocaleString("ru-RU")} ₽. Если это индивидуальная цена — включи «Другая цена для этого клиента» и измени стоимость.`);
-      return;
-    }
     setBusy(true);
     try {
       await onPay(method, {
@@ -65,7 +61,6 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
   }
 
   const priceChanged = serviceTotal !== full;
-  const change = Math.max(0, received - serviceTotal);
 
   return (
     <div className="rounded-2xl p-3 bg-[var(--surface)] border border-[var(--line)]">
@@ -159,12 +154,6 @@ export default function PaymentSheet({ price, onPay, onClose, canRememberPrice =
         </div>
         <div className="text-[11px] mt-1 text-[var(--ink-soft)]">Для оплаты картой это поле не используется.</div>
       </div>
-
-      {change > 0 && (
-        <div className="mt-2 rounded-xl px-3 py-2 text-xs" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>
-          Сдача {change.toLocaleString("ru-RU")} ₽. При оплате наличными она будет сохранена на балансе клиента как аванс.
-        </div>
-      )}
 
       <div className="flex gap-2 mt-3">
         <button

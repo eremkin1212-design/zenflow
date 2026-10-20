@@ -3,9 +3,9 @@ import { supabase } from "../lib/supabaseClient";
 import { cacheResource, getCachedResource } from "./offlineStore";
 
 export function ratingTag(c) {
-  if (c.last_visit?.includes("месяц") || c.last_visit?.includes("год")) return { label: "Редкий клиент", tone: "clay" };
-  if (c.visits >= 10 && c.cancellations === 0) return { label: "Постоянный клиент", tone: "moss" };
+  if (c.visits >= 5) return { label: "Постоянный клиент", tone: "moss" };
   if (c.visits <= 2) return { label: "Новый клиент", tone: "clay" };
+  if (c.last_visit?.includes("месяц") || c.last_visit?.includes("год")) return { label: "Редкий клиент", tone: "clay" };
   return { label: "Обычный клиент", tone: "soft" };
 }
 

@@ -1,7 +1,7 @@
 // RITENA service worker.
 // Кэширует оболочку приложения для офлайн-работы и принимает push-уведомления.
 
-const VERSION = "ritena-v2";
+const VERSION = "ritena-v3";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -49,21 +49,32 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin || url.pathname === "/sw.js") return;
 
-  // Навигация: сначала свежая версия, при отсутствии сети — сохранённая оболочка.
+  // Навигация: если оболочка уже закэширована, открываем её сразу.
+  // Свежую версию подтягиваем в фоне. Это убирает долгие 20–30-секундные
+  // ожидания на Android при нестабильном маршруте до сервера.
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
+        const cache = await caches.open(VERSION);
+        const cached = await cache.match("/");
+
+        if (cached) {
+          event.waitUntil(
+            fetch(req, { cache: "no-store" })
+              .then(async (fresh) => {
+                if (fresh.ok) await cache.put("/", fresh.clone());
+              })
+              .catch(() => {})
+          );
+          return cached;
+        }
+
         try {
-          const fresh = await fetch(req);
-          if (fresh.ok) {
-            const cache = await caches.open(VERSION);
-            await cache.put("/", fresh.clone());
-          }
+          const fresh = await fetch(req, { cache: "no-store" });
+          if (fresh.ok) await cache.put("/", fresh.clone());
           return fresh;
         } catch {
-          const cache = await caches.open(VERSION);
-          const cached = await cache.match("/");
-          return cached || Response.error();
+          return Response.error();
         }
       })()
     );

@@ -21,19 +21,27 @@ export function AuthProvider({ children }) {
       }
 
       const current = data.session;
+
+      // Не держим весь интерфейс на экране «Загрузка…», пока сеть обновляет токен.
+      // Сохранённая Supabase-сессия уже позволяет сразу открыть приложение.
+      setSession(current);
+
       const expiresAtMs = Number(current.expires_at || 0) * 1000;
       const expiresSoon = !expiresAtMs || expiresAtMs - Date.now() < 2 * 60 * 1000;
 
       if (forceRefresh || expiresSoon) {
-        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-        if (!alive) return;
-        if (!refreshError && refreshed?.session) {
-          setSession(refreshed.session);
-          return;
+        try {
+          const refresh = supabase.auth.refreshSession();
+          const timeout = new Promise((resolve) => {
+            window.setTimeout(() => resolve({ data: null, error: new Error("refresh timeout") }), 5000);
+          });
+          const { data: refreshed, error: refreshError } = await Promise.race([refresh, timeout]);
+          if (!alive) return;
+          if (!refreshError && refreshed?.session) setSession(refreshed.session);
+        } catch {
+          // Оставляем текущую сохранённую сессию. Auto-refresh повторит попытку позже.
         }
       }
-
-      setSession(current);
     }
 
     syncSession(false);

@@ -2,6 +2,7 @@
 
 import { supabase } from "../lib/supabaseClient";
 import { cacheResource, getCachedResource } from "./offlineStore";
+import { runSupabaseRequest } from "../lib/supabaseAuthRetry";
 
 function withReadTimeout(promise, ms = 5000) {
   let timer;
@@ -15,7 +16,7 @@ export async function getServices() {
   try {
     if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("offline");
     const { data, error } = await withReadTimeout(
-      supabase.from("services").select("*").order("id", { ascending: true })
+      runSupabaseRequest(() => supabase.from("services").select("*").order("id", { ascending: true }))
     );
     if (error) throw error;
     const result = data || [];

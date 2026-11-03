@@ -56,14 +56,16 @@ export function getPendingAppointments(ownerId) {
 }
 
 export function queuePendingAppointment(ownerId, item) {
-  if (!ownerId || !item?.offlineId) return;
+  if (!ownerId || !item?.offlineId) throw new Error("Не удалось подготовить офлайн-запись");
   const list = getPendingAppointments(ownerId);
   const next = [...list.filter((x) => x.offlineId !== item.offlineId), {
     ...item,
     queuedAt: item.queuedAt || new Date().toISOString(),
   }];
-  writeJson(key(ownerId, "pending-appointments"), next);
+  const saved = writeJson(key(ownerId, "pending-appointments"), next);
+  if (!saved) throw new Error("Не удалось сохранить запись на устройстве. Освободи место в браузере и попробуй снова.");
   emit();
+  return true;
 }
 
 export function removePendingAppointment(ownerId, offlineId) {

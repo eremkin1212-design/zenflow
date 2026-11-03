@@ -21,9 +21,9 @@ export default function OfflineSyncBridge() {
   const warmOfflineCache = useCallback(async () => {
     if (!user?.id || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
     const start = new Date();
-    start.setDate(start.getDate() - 14);
+    start.setDate(start.getDate() - 90);
     const end = new Date();
-    end.setDate(end.getDate() + 90);
+    end.setDate(end.getDate() + 365);
     await Promise.allSettled([
       getClients(),
       getServices(),
@@ -62,7 +62,7 @@ export default function OfflineSyncBridge() {
     const onOnline = () => { setOnline(true); runSync(); warmOfflineCache(); };
     const onOffline = () => { setOnline(false); refresh(); };
     const onChange = () => { refresh(); if (navigator.onLine) runSync(); };
-    const onVisible = () => { if (document.visibilityState === "visible") runSync(); };
+    const onVisible = () => { if (document.visibilityState === "visible") { runSync(); warmOfflineCache(); } };
 
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);

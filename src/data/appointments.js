@@ -28,8 +28,10 @@ return Number(status)===401||code==="PGRST301"||message.includes("jwt expired")|
 async function runWriteWithAuthRetry(operation){
 let result=await operation();
 if(result?.error&&isExpiredAuthError(result.error,result.status)){
-const {error:refreshError}=await supabase.auth.refreshSession();
-if(!refreshError) result=await operation();
+try{
+const refresh=await withTimeout(supabase.auth.refreshSession(),4000);
+if(!refresh?.error) result=await operation();
+}catch{}
 }
 return result;
 }
@@ -52,7 +54,7 @@ export async function getAppointmentsRange(startDate,endDate){
     return sortAppointments([...cached,...pending]);
   }
   try{
-    const {data,error}=await withTimeout(supabase.from("appointments").select(SELECT).gte("date",startKey).lte("date",endKey).order("date").order("start_time"),5000);
+    const {data,error}=await withTimeout(supabase.from("appointments").select(SELECT).gte("date",startKey).lte("date",endKey).order("date").order("start_time"),3000);
     if(error)throw error;
     const remote=data||[];
     if(ownerId) cacheAppointments(ownerId,remote);
@@ -95,10 +97,33 @@ export async function createAppointmentIdempotent(payload){
 function isLikelyNetworkError(error){
   if(typeof navigator!=="undefined" && navigator.onLine===false) return true;
   const message=String(error?.message||error||"").toLowerCase();
-  return error?.name==="TypeError"||message.includes("failed to fetch")||message.includes("network")||message.includes("load failed")||message.includes("timeout")||message.includes("offline")||message.includes("fetch failed");
+  const name=String(error?.name||"").toLowerCase();
+  const status=Number(error?.status||error?.statusCode||0);
+  return (
+    name==="typeerror" ||
+    name==="aborterror" ||
+    name.includes("fetch") ||
+    name.includes("retryable") ||
+    status===0 ||
+    status===408 ||
+    status===425 ||
+    status===429 ||
+    status>=500 ||
+    message.includes("failed to fetch") ||
+    message.includes("fetch failed") ||
+    message.includes("network") ||
+    message.includes("network request failed") ||
+    message.includes("load failed") ||
+    message.includes("connection") ||
+    message.includes("err_internet_disconnected") ||
+    message.includes("err_network_changed") ||
+    message.includes("timeout") ||
+    message.includes("timed out") ||
+    message.includes("offline")
+  );
 }
 
-function withTimeout(promise,ms=9000){
+function withTimeout(promise,ms=4000){
   let timer;
   const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("offline timeout")),ms)});
   return Promise.race([promise,timeout]).finally(()=>clearTimeout(timer));
@@ -129,6 +154,7 @@ export async function createAppointmentOfflineReady(payload,services,{client,for
   try{
     const appointment=await withTimeout(createAppointmentIdempotent(normalized));
     await withTimeout(saveAppointmentServices(appointment.id,services));
+    if(ownerId) cacheAppointments(ownerId,[appointment]);
     return appointment;
   }catch(error){
     if(isLikelyNetworkError(error)){

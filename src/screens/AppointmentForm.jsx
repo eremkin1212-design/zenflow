@@ -42,7 +42,62 @@ export default function AppointmentForm(){
  const baseSinglePrice=singleService?Number(singleService.basePrice??singleService.price??0):0;
  const defaultSinglePrice=savedPersonalPrice!==undefined?Number(savedPersonalPrice):baseSinglePrice;
  const personalPriceChanged=Boolean(singleService&&client)&&price!==defaultSinglePrice;
- useEffect(()=>{let dead=false;const cid=params.get("client");Promise.all([getServices(),getClients(),id?getAppointmentById(id):Promise.resolve(null),id?getAppointmentServices(id):Promise.resolve([]),id?getAppointmentPayment(id):Promise.resolve(null),!id&&cid?getClientById(cid):Promise.resolve(null)]).then(([sv,cl,a,as,p,linkedClient])=>{if(dead)return;setServices(sv);setClients(cl);if(a){if(a.clients)setClient({id:a.clients.id,name:a.clients.name});setDate(new Date(`${a.date}T12:00:00`));setTimeMin(timeToMin(a.start_time));setNotes(a.notes||"");setPayment(p);if(as?.length)setSelectedServices(as.map(x=>({id:x.service_id,duration:x.duration,price:Number(x.price??x.services?.price??0),basePrice:Number(x.services?.price??x.price??0),name:x.services?.name,color:x.services?.color})));else if(a.services)setSelectedServices([{...a.services,price:Number(a.price??a.services.price??0),basePrice:Number(a.services.price??a.price??0)}]);setAppointmentPrice(String(Number(a.price||0)));setPriceTouched(true);}else{const qd=params.get("date"),qt=params.get("time");if(qd)setDate(new Date(`${qd}T12:00:00`));if(qt)setTimeMin(timeToMin(qt));if(linkedClient)setClient({id:linkedClient.id,name:linkedClient.name});else if(cid){const c=cl.find(x=>String(x.id)===cid);if(c)setClient({id:c.id,name:c.name})}}setLoading(false)}).catch(()=>{if(!dead){setError("Не удалось загрузить данные");setLoading(false)}});return()=>{dead=true}},[id,params]);
+ useEffect(()=>{
+  let dead=false;
+  const cid=params.get("client");
+  Promise.allSettled([
+    getServices(),
+    getClients(),
+    id?getAppointmentById(id):Promise.resolve(null),
+    id?getAppointmentServices(id):Promise.resolve([]),
+    id?getAppointmentPayment(id):Promise.resolve(null),
+    !id&&cid?getClientById(cid):Promise.resolve(null),
+  ]).then((results)=>{
+    if(dead)return;
+    const value=(index,fallback)=>results[index]?.status==="fulfilled"?results[index].value:fallback;
+    const sv=value(0,[]);
+    const cl=value(1,[]);
+    const a=value(2,null);
+    const as=value(3,[]);
+    const p=value(4,null);
+    const linkedClient=value(5,null);
+
+    setServices(Array.isArray(sv)?sv:[]);
+    setClients(Array.isArray(cl)?cl:[]);
+
+    if(id&&!a){
+      setError("Эта запись недоступна офлайн. Открой её один раз с интернетом.");
+      setLoading(false);
+      return;
+    }
+
+    if(a){
+      if(a.clients)setClient({id:a.clients.id,name:a.clients.name});
+      setDate(new Date(`${a.date}T12:00:00`));
+      setTimeMin(timeToMin(a.start_time));
+      setNotes(a.notes||"");
+      setPayment(p);
+      if(as?.length)setSelectedServices(as.map(x=>({id:x.service_id,duration:x.duration,price:Number(x.price??x.services?.price??0),basePrice:Number(x.services?.price??x.price??0),name:x.services?.name,color:x.services?.color})));
+      else if(a.services)setSelectedServices([{...a.services,price:Number(a.price??a.services.price??0),basePrice:Number(a.services.price??a.price??0)}]);
+      setAppointmentPrice(String(Number(a.price||0)));
+      setPriceTouched(true);
+    }else{
+      const qd=params.get("date"),qt=params.get("time");
+      if(qd)setDate(new Date(`${qd}T12:00:00`));
+      if(qt)setTimeMin(timeToMin(qt));
+      if(linkedClient)setClient({id:linkedClient.id,name:linkedClient.name});
+      else if(cid){
+        const linked=cl.find(x=>String(x.id)===cid);
+        if(linked)setClient({id:linked.id,name:linked.name});
+      }
+      if((typeof navigator!=="undefined"&&navigator.onLine===false)&&(!sv.length||!cl.length)){
+        setError("Для офлайн-записи сначала один раз открой RITENA с интернетом, чтобы сохранить клиентов и услуги на этом телефоне.");
+      }
+    }
+    setLoading(false);
+  });
+  return()=>{dead=true}
+},[id,params]);
  const {user}=useAuth();
  useEffect(()=>{if(!user)return;let dead=false;getProfile(user.id).then(p=>{if(!dead)setHours(p?.working_hours||null)}).catch(()=>{});return()=>{dead=true}},[user]);
  useEffect(()=>{let dead=false;if(!client?.id){setClientBalance(0);return()=>{dead=true}}getClientBalance(client.id).then(v=>{if(!dead)setClientBalance(v)}).catch(()=>{if(!dead)setClientBalance(0)});return()=>{dead=true}},[client?.id]);
@@ -154,8 +209,8 @@ export default function AppointmentForm(){
    if(payment)await updateAppointmentPayment(payment.id,price);
    if(pricePreferenceError)window.alert("Запись сохранена, но персональную цену клиента запомнить не удалось.");
    navigate("/calendar");
-  }catch{
-   setError("Не удалось сохранить запись");
+  }catch(e){
+   setError(e?.message||"Не удалось сохранить запись");
    setSaving(false);
   }
  }

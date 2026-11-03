@@ -17,7 +17,7 @@ export function fmtDate(d) {
 const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const day = String(d.getDate()).padStart(2, "0");
 return `${y}-${m}-${day}`;
 }
-const SELECT = "*, clients(id,name,phone,color,highlights), services(id,name,color,duration,price), appointment_services(services(name))";
+const SELECT = "*, clients(id,name,phone,color,highlights), services(id,name,color,duration,price), appointment_services(id,service_id,duration,price,services(id,name,color,duration,price))";
 
 function isExpiredAuthError(error,status){
 const code=String(error?.code||"");
@@ -67,8 +67,46 @@ export async function getAppointmentsRange(startDate,endDate){
     return sortAppointments([...cached,...pending.filter(a=>!cachedOfflineIds.has(a.offline_id))]);
   }
 }
-export async function getAppointmentById(id){const {data,error}=await supabase.from("appointments").select(SELECT).eq("id",id).maybeSingle();if(error)throw error;return data;}
-export async function getAppointmentServices(appointmentId){const {data,error}=await supabase.from("appointment_services").select("id,appointment_id,service_id,duration,price,services(id,name,color,duration,price)").eq("appointment_id",appointmentId).order("id");if(error)throw error;return data||[];}
+export async function getAppointmentById(id){
+  const ownerId=await currentOwnerId();
+  const cached=ownerId?getCachedAppointmentsRange(ownerId,"0000-01-01","9999-12-31"):[];
+  const cachedMatch=cached.find((a)=>String(a.id)===String(id));
+  if(String(id||"").startsWith("offline:")){
+    const offlineId=String(id).slice("offline:".length);
+    const pending=ownerId?getPendingAppointments(ownerId):[];
+    const item=pending.find((x)=>String(x.offlineId)===offlineId);
+    return item?pendingToAppointment(item):cachedMatch||null;
+  }
+  if(typeof navigator!=="undefined"&&navigator.onLine===false) return cachedMatch||null;
+  try{
+    const {data,error}=await withTimeout(supabase.from("appointments").select(SELECT).eq("id",id).maybeSingle(),3000);
+    if(error)throw error;
+    if(data&&ownerId)cacheAppointments(ownerId,[data]);
+    return data||cachedMatch||null;
+  }catch(error){
+    if(cachedMatch)return cachedMatch;
+    throw error;
+  }
+}
+export async function getAppointmentServices(appointmentId){
+  const ownerId=await currentOwnerId();
+  const cachedAppointment=ownerId
+    ? getCachedAppointmentsRange(ownerId,"0000-01-01","9999-12-31").find((a)=>String(a.id)===String(appointmentId))
+    : null;
+  const cachedRows=Array.isArray(cachedAppointment?.appointment_services)?cachedAppointment.appointment_services:[];
+  if(typeof navigator!=="undefined"&&navigator.onLine===false) return cachedRows;
+  try{
+    const {data,error}=await withTimeout(
+      supabase.from("appointment_services").select("id,appointment_id,service_id,duration,price,services(id,name,color,duration,price)").eq("appointment_id",appointmentId).order("id"),
+      3000
+    );
+    if(error)throw error;
+    return data||cachedRows;
+  }catch(error){
+    if(cachedRows.length)return cachedRows;
+    throw error;
+  }
+}
 export async function getAppointmentPayment(appointmentId){const {data,error}=await supabase.from("client_payments").select("id,amount,method,date,discount_percent").eq("appointment_id",appointmentId).order("id",{ascending:false}).limit(1).maybeSingle();if(error)throw error;return data;}
 
 export async function updateAppointmentPayment(paymentId){const {data,error}=await supabase.from("client_payments").select("*").eq("id",paymentId).single();if(error)throw error;return data;}

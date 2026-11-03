@@ -1,6 +1,7 @@
 // Слой доступа к данным о клиентах — реальная база Supabase.
 import { supabase } from "../lib/supabaseClient";
 import { cacheResource, getCachedResource } from "./offlineStore";
+import { runSupabaseRequest } from "../lib/supabaseAuthRetry";
 
 export function ratingTag(c) {
   if (c.visits >= 5) return { label: "Постоянный клиент", tone: "moss" };
@@ -23,7 +24,7 @@ function todayLocal() {
 async function getAppointmentStats(clientIds) {
   if (!clientIds?.length) return {};
   const today = todayLocal();
-  const { data, error } = await supabase.from("appointments").select("id, client_id, date, price, status").in("client_id", clientIds).lte("date", today);
+  const { data, error } = await runSupabaseRequest(() => supabase.from("appointments").select("id, client_id, date, price, status").in("client_id", clientIds).lte("date", today));
   if (error) throw error;
   const stats = {};
   for (const id of clientIds) stats[id] = { visits: 0, cancellations: 0, total: 0, lastVisit: null };
@@ -41,14 +42,14 @@ async function getAppointmentStats(clientIds) {
 async function getNextVisits(clientIds) {
   if (!clientIds?.length) return {};
   const today = todayLocal();
-  const { data, error } = await supabase
+  const { data, error } = await runSupabaseRequest(() => supabase
     .from("appointments")
     .select("id, client_id, date, start_time, status")
     .in("client_id", clientIds)
     .gte("date", today)
     .eq("status", "planned")
     .order("date", { ascending: true })
-    .order("start_time", { ascending: true });
+    .order("start_time", { ascending: true }));
   if (error) return {};
   const next = {};
   for (const a of data || []) {
@@ -87,7 +88,7 @@ export async function getClients() {
   try {
     if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("offline");
     const result = await withReadTimeout((async () => {
-      const { data, error } = await supabase.from("clients").select("*").order("id", { ascending: true });
+      const { data, error } = await runSupabaseRequest(() => supabase.from("clients").select("*").order("id", { ascending: true }));
       if (error) throw error;
       const ids = (data || []).map((c) => c.id);
       const [stats, nextVisits] = await Promise.all([getAppointmentStats(ids), getNextVisits(ids)]);
@@ -108,7 +109,7 @@ export async function getClientById(id) {
   try {
     if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("offline");
     const result = await withReadTimeout((async () => {
-      const { data, error } = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await runSupabaseRequest(() => supabase.from("clients").select("*").eq("id", id).maybeSingle());
       if (error) throw error;
       if (!data) return null;
       const [stats, nextVisits] = await Promise.all([getAppointmentStats([data.id]), getNextVisits([data.id])]);

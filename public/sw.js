@@ -1,7 +1,7 @@
 // RITENA service worker.
 // Кэширует оболочку приложения для офлайн-работы и принимает push-уведомления.
 
-const VERSION = "ritena-v3";
+const VERSION = "ritena-v4";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

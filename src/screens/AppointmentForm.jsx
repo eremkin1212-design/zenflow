@@ -8,14 +8,32 @@ import { getProfile } from "../data/profile";
 import { getServices } from "../data/services";
 import { getClients, getClientById, createClient } from "../data/clients";
 import { getClientBalance } from "../data/clientBalance";
-import { getAppointmentById, getAppointmentServices, getAppointmentPayment, updateAppointmentPayment, createAppointmentOfflineReady, updateAppointment, saveAppointmentServices, completeAppointmentWithBalance, fmtDate } from "../data/appointments";
+import { getAppointmentsRange, getAppointmentById, getAppointmentServices, getAppointmentPayment, updateAppointmentPayment, createAppointmentOfflineReady, updateAppointment, saveAppointmentServices, completeAppointmentWithBalance, fmtDate } from "../data/appointments";
 import { canPickPhoneContact, isContactPickerCancel, pickPhoneContact } from "../lib/contactPicker";
 import { clearClientServicePrice, getClientServicePrices, setClientServicePrice } from "../data/clientServicePrices";
 
 const WEEKDAYS=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 const KEYS=["mon","tue","wed","thu","fri","sat","sun"];
 const DEFAULT_WEEK=KEYS.map(key=>({key,on:false,start:"10:00",end:"22:00",breakStart:null,breakEnd:null}));
-function getWorkingHours(p,date){const w=p?.working_hours;if(Array.isArray(w)) return w.find(x=>x.key===KEYS[(date.getDay()+6)%7])||DEFAULT_WEEK[(date.getDay()+6)%7];const weekly=w?.weekly||DEFAULT_WEEK;return weekly.find(x=>x.key===KEYS[(date.getDay()+6)%7])||DEFAULT_WEEK[(date.getDay()+6)%7];}
+function getWorkingHours(p,date){
+ const w=p?.working_hours;
+ const key=fmtDate(date);
+ if(!Array.isArray(w)&&w?.dates?.[key]) return w.dates[key];
+ const weekly=Array.isArray(w)?w:(w?.weekly||DEFAULT_WEEK);
+ return weekly.find(x=>x.key===KEYS[(date.getDay()+6)%7])||DEFAULT_WEEK[(date.getDay()+6)%7];
+}
+function slotError(slot, duration, schedule){
+ const d=new Date(`${slot.date}T12:00:00`);
+ if(Number.isNaN(d.getTime())) return "Неверная дата записи";
+ const h=getWorkingHours(schedule,d);
+ const start=timeToMin(slot.time),end=start+duration;
+ if(!h.on) return `${slot.date}: выходной день — запись недоступна`;
+ if(!duration||start<timeToMin(h.start)||end>timeToMin(h.end))
+  return `${slot.date}: запись должна полностью помещаться в рабочее время ${h.start}–${h.end}`;
+ if(h.breakStart&&h.breakEnd&&start<timeToMin(h.breakEnd)&&end>timeToMin(h.breakStart))
+  return `${slot.date}: запись пересекается с перерывом ${h.breakStart}–${h.breakEnd}`;
+ return "";
+}
 function isWorkingDate(schedule,date){if(!schedule)return false;const dates=Array.isArray(schedule)?{}:(schedule.dates||{});const key=fmtDate(date);if(dates[key])return dates[key].on!==false;const weekly=Array.isArray(schedule)?schedule:(schedule.weekly||[]);const item=weekly.find(x=>x.key===KEYS[(date.getDay()+6)%7]);return Boolean(item&&item.on)}
 function startOfWeek(d){const x=new Date(d);x.setDate(x.getDate()-((x.getDay()+6)%7));x.setHours(0,0,0,0);return x}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
@@ -27,6 +45,7 @@ export default function AppointmentForm(){
  const {mode}=useParams(); const id=mode==="new"?null:mode; const [params]=useSearchParams(); const navigate=useNavigate(); const today=useMemo(()=>new Date(),[]);
  const [services,setServices]=useState([]),[clients,setClients]=useState([]),[hours,setHours]=useState(null),[client,setClient]=useState(null),[selectedServices,setSelectedServices]=useState([]),[date,setDate]=useState(today),[timeMin,setTimeMin]=useState(600),[notes,setNotes]=useState(""),[payment,setPayment]=useState(null),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(""),[query,setQuery]=useState(""),[quick,setQuick]=useState(false),[quickName,setQuickName]=useState(""),[quickPhone,setQuickPhone]=useState(""),[pickingQuickContact,setPickingQuickContact]=useState(false);
  const [serviceQuery,setServiceQuery]=useState(""),[extraSlots,setExtraSlots]=useState([]);
+ const [scheduleLoaded,setScheduleLoaded]=useState(false);
  const [clientPrices,setClientPrices]=useState({}),[appointmentPrice,setAppointmentPrice]=useState("0"),[priceTouched,setPriceTouched]=useState(false),[rememberPrice,setRememberPrice]=useState(false);
  const [clientBalance,setClientBalance]=useState(0),[payOpen,setPayOpen]=useState(false),[payMethod,setPayMethod]=useState("Наличные"),[cashReceived,setCashReceived]=useState(""),[useBalance,setUseBalance]=useState(true),[keepChange,setKeepChange]=useState(false);
  const monday=useMemo(()=>{const x=startOfWeek(today);x.setDate(x.getDate()+weekDiff(today,date)*7);return x},[today,date]); const week=useMemo(()=>Array.from({length:7},(_,i)=>addDays(monday,i)),[monday]);
@@ -99,7 +118,7 @@ export default function AppointmentForm(){
   return()=>{dead=true}
 },[id,params]);
  const {user}=useAuth();
- useEffect(()=>{if(!user)return;let dead=false;getProfile(user.id).then(p=>{if(!dead)setHours(p?.working_hours||null)}).catch(()=>{});return()=>{dead=true}},[user]);
+ useEffect(()=>{if(!user)return;let dead=false;getProfile(user.id).then(p=>{if(!dead){setHours(p?.working_hours||null);setScheduleLoaded(true)}}).catch(()=>{if(!dead)setScheduleLoaded(false)});return()=>{dead=true}},[user]);
  useEffect(()=>{let dead=false;if(!client?.id){setClientBalance(0);return()=>{dead=true}}getClientBalance(client.id).then(v=>{if(!dead)setClientBalance(v)}).catch(()=>{if(!dead)setClientBalance(0)});return()=>{dead=true}},[client?.id]);
  useEffect(()=>{
   let dead=false;
@@ -167,8 +186,27 @@ export default function AppointmentForm(){
   if(slots.some(slot=>!slot.date||!slot.time)){setError("Укажите дату и время для каждой записи");return}
   const slotKeys=slots.map(slot=>`${slot.date}|${slot.time}`);
   if(new Set(slotKeys).size!==slotKeys.length){setError("Одинаковая дата и время выбраны несколько раз");return}
+  if(!scheduleLoaded){setError("Не удалось проверить рабочий график. Подключись к интернету и повтори.");return}
+  for(const slot of slots){
+   const invalid=slotError(slot,duration,hours);
+   if(invalid){setError(invalid);return}
+  }
+  for(let i=0;i<slots.length;i++){
+   for(let j=i+1;j<slots.length;j++){
+    if(slots[i].date===slots[j].date&&timeToMin(slots[i].time)<timeToMin(slots[j].time)+duration&&timeToMin(slots[j].time)<timeToMin(slots[i].time)+duration){
+     setError("Время занято: создаваемые записи пересекаются между собой");return;
+    }
+   }
+  }
   setSaving(true);
   try{
+   const dates=slots.map(s=>s.date).sort();
+   const existing=await getAppointmentsRange(new Date(`${dates[0]}T12:00:00`),new Date(`${dates[dates.length-1]}T12:00:00`));
+   for(const slot of slots){
+    const start=timeToMin(slot.time);
+    const conflict=existing.find(a=>a.date===slot.date&&a.status!=="cancelled"&&String(a.id)!==String(id)&&start<timeToMin(a.start_time)+Number(a.duration||0)&&timeToMin(a.start_time)<start+duration);
+    if(conflict) throw new Error(`Время занято: ${slot.date}, ${slot.time}. Уже есть запись ${conflict.start_time} (${conflict.clients?.name||"клиент"})`);
+   }
    const servicesForSave=selectedServices.length===1?[{...selectedServices[0],price}]:selectedServices;
    const basePayload={client_id:client.id,service_id:selectedServices[0].id,duration,price,full_price:price,list_price:listPrice,notes};
    let a;

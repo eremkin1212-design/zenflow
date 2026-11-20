@@ -15,12 +15,16 @@ import { clearClientServicePrice, getClientServicePrices, setClientServicePrice 
 const WEEKDAYS=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 const KEYS=["mon","tue","wed","thu","fri","sat","sun"];
 const DEFAULT_WEEK=KEYS.map(key=>({key,on:false,start:"10:00",end:"22:00",breakStart:null,breakEnd:null}));
-function getWorkingHours(p,date){
- const w=p?.working_hours;
- const key=fmtDate(date);
- if(!Array.isArray(w)&&w?.dates?.[key]) return w.dates[key];
+function getWorkingHours(schedule,date){
+ const w=schedule?.working_hours||schedule;
+ const index=(date.getDay()+6)%7;
  const weekly=Array.isArray(w)?w:(w?.weekly||DEFAULT_WEEK);
- return weekly.find(x=>x.key===KEYS[(date.getDay()+6)%7])||DEFAULT_WEEK[(date.getDay()+6)%7];
+ const base=weekly.find(x=>x.key===KEYS[index])||DEFAULT_WEEK[index];
+ const override=!Array.isArray(w)?w?.dates?.[fmtDate(date)]:null;
+ if(!override)return base;
+ // A date override is a working day unless explicitly marked as a day off.
+ // Keep the same interpretation for the green indicator and save validation.
+ return {...base,...override,on:override.on!==false};
 }
 function slotError(slot, duration, schedule){
  const d=new Date(`${slot.date}T12:00:00`);
@@ -34,7 +38,7 @@ function slotError(slot, duration, schedule){
   return `${slot.date}: запись пересекается с перерывом ${h.breakStart}–${h.breakEnd}`;
  return "";
 }
-function isWorkingDate(schedule,date){if(!schedule)return false;const dates=Array.isArray(schedule)?{}:(schedule.dates||{});const key=fmtDate(date);if(dates[key])return dates[key].on!==false;const weekly=Array.isArray(schedule)?schedule:(schedule.weekly||[]);const item=weekly.find(x=>x.key===KEYS[(date.getDay()+6)%7]);return Boolean(item&&item.on)}
+function isWorkingDate(schedule,date){return Boolean(schedule&&getWorkingHours(schedule,date).on)}
 function startOfWeek(d){const x=new Date(d);x.setDate(x.getDate()-((x.getDay()+6)%7));x.setHours(0,0,0,0);return x}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
 function pad(n){return String(n).padStart(2,"0")}

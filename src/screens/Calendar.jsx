@@ -222,6 +222,15 @@ const gridHeight = contentHeight + 24;
   }
   async function saveWorkTime() {
     if (!user) return;
+    if (minutes(workStart) >= minutes(workEnd)) {
+      window.alert("Окончание рабочего дня должно быть позже начала");
+      return;
+    }
+    if (dayHours.breakStart && dayHours.breakEnd &&
+      (minutes(dayHours.breakStart) < minutes(workStart) || minutes(dayHours.breakEnd) > minutes(workEnd))) {
+      window.alert("Сначала измени или убери перерыв в настройках: он должен быть внутри рабочего дня");
+      return;
+    }
     setSavingWorkTime(true);
     try {
       const current = normalizeSchedule(hours);

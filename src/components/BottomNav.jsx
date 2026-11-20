@@ -23,6 +23,12 @@ export default function BottomNav() {
           key={to}
           to={to}
           end
+          onClick={(event) => {
+            if (to === "/calendar" && location.pathname === "/calendar") {
+              event.preventDefault();
+              window.dispatchEvent(new CustomEvent("ritena:calendar-today"));
+            }
+          }}
           className={({ isActive }) => {
             const active = isActive || (to === "/settings" && location.pathname.startsWith("/support"));
             return `flex flex-col items-center gap-1 text-[11px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--moss)] ${

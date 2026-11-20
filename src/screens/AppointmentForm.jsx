@@ -208,19 +208,19 @@ export default function AppointmentForm(){
    }
    if(payment)await updateAppointmentPayment(payment.id,price);
    if(pricePreferenceError)window.alert("Запись сохранена, но персональную цену клиента запомнить не удалось.");
-   navigate("/calendar");
+   navigate(`/calendar?date=${slots[0].date}`);
   }catch(e){
    setError(e?.message||"Не удалось сохранить запись");
    setSaving(false);
   }
  }
- async function cancel(){if(!id||!window.confirm("Отменить запись?"))return;try{await updateAppointment(id,{status:"cancelled"});navigate("/calendar")}catch{setError("Не удалось отменить")}}
+ async function cancel(){if(!id||!window.confirm("Отменить запись?"))return;try{await updateAppointment(id,{status:"cancelled"});navigate(`/calendar?date=${fmtDate(date)}`)}catch{setError("Не удалось отменить")}}
  function openPayment(method){const used=clientBalance>0?Math.min(clientBalance,price):0;const due=Math.max(0,price-used);setPayMethod(method);setUseBalance(clientBalance>0);setKeepChange(false);setCashReceived(String(due));setPayOpen(true);setError("")}
  const balanceUsed=useBalance?Math.min(Math.max(clientBalance,0),price):0;
  const amountDue=Math.max(0,price-balanceUsed);
  const receivedValue=payMethod==="Наличные"?Math.max(0,Number(cashReceived)||0):amountDue;
  const change=Math.max(0,receivedValue-amountDue);
- async function confirmPayment(){if(!id)return;if(payMethod==="Наличные"&&receivedValue<amountDue){setError(`Не хватает ${(amountDue-receivedValue).toLocaleString("ru-RU")} ₽`);return}setSaving(true);setError("");try{await completeAppointmentWithBalance({id,client_id:client?.id,price},{method:payMethod,received:receivedValue,useBalance,keepChange});navigate("/calendar")}catch(e){setError(e?.message||"Не удалось принять оплату");setSaving(false)}}
+ async function confirmPayment(){if(!id)return;if(payMethod==="Наличные"&&receivedValue<amountDue){setError(`Не хватает ${(amountDue-receivedValue).toLocaleString("ru-RU")} ₽`);return}setSaving(true);setError("");try{await completeAppointmentWithBalance({id,client_id:client?.id,price},{method:payMethod,received:receivedValue,useBalance,keepChange});navigate(`/calendar?date=${fmtDate(date)}`)}catch(e){setError(e?.message||"Не удалось принять оплату");setSaving(false)}}
  if(loading)return <div className="min-h-screen bg-[var(--paper)] flex items-center justify-center text-sm text-[var(--ink-soft)]">Загружаем…</div>;
  return <><div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans"><div className="max-w-sm mx-auto pb-28">
   <div className="flex items-center justify-between px-5 pt-7 pb-2"><button onClick={()=>navigate(-1)} className="rounded-full p-2.5 bg-[var(--surface-alt)]"><ArrowLeft size={18}/></button><div className="text-lg font-serif">{id?"Редактирование записи":"Новая запись"}</div><ThemeToggle/></div>

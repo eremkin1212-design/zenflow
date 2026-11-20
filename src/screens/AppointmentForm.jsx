@@ -32,8 +32,10 @@ function slotError(slot, duration, schedule){
  const h=getWorkingHours(schedule,d);
  const start=timeToMin(slot.time),end=start+duration;
  if(!h.on) return `${slot.date}: выходной день — запись недоступна`;
- if(!duration||start<timeToMin(h.start)||end>timeToMin(h.end))
-  return `${slot.date}: запись должна полностью помещаться в рабочее время ${h.start}–${h.end}`;
+ // Allow an appointment started during working hours to finish up to 30 minutes late.
+ const workStart=timeToMin(h.start),workEnd=timeToMin(h.end);
+ if(!duration||start<workStart||start>=workEnd||end>workEnd+30)
+  return `${slot.date}: запись должна начинаться в рабочее время ${h.start}–${h.end} и завершаться не позднее ${minToTime(workEnd+30)} (допуск 30 минут)`;
  if(h.breakStart&&h.breakEnd&&start<timeToMin(h.breakEnd)&&end>timeToMin(h.breakStart))
   return `${slot.date}: запись пересекается с перерывом ${h.breakStart}–${h.breakEnd}`;
  return "";

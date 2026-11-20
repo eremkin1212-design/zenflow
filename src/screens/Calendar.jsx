@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Plus, X, Check, GripVertical } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomNav from "../components/BottomNav";
@@ -23,7 +23,6 @@ const DEFAULT_WEEK = [
 ];
 const HOUR_H = 52;
 const GUTTER = 40; // ширина колонки с часами слева (left-10)
-const CALENDAR_DATE_KEY = "zenflow-calendar-selected-date";
 function minutes(t) { const [h, m] = String(t || "00:00").split(":").map(Number); return h * 60 + m; }
 function time(m) { return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; }
 // Все услуги записи: если их несколько, показываем через запятую.
@@ -42,13 +41,10 @@ function hoursForDate(scheduleValue, date) {
   const base = schedule.weekly.find((d) => d.key === KEYS[mondayIndex(date)]) || DEFAULT_WEEK[mondayIndex(date)];
   return schedule.dates[key] ? { ...base, ...schedule.dates[key] } : base;
 }
-function readSavedDate() {
-  try {
-    const saved = localStorage.getItem(CALENDAR_DATE_KEY);
-    if (!saved) return new Date();
-    const d = new Date(`${saved}T12:00:00`);
-    return Number.isNaN(d.getTime()) ? new Date() : d;
-  } catch { return new Date(); }
+function parseCalendarDate(value) {
+  if (!value) return new Date();
+  const d = new Date(`${value}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
 // Раскладка пересекающихся записей по колонкам: записи, которые идут
@@ -84,14 +80,16 @@ function buildLayout(list) {
 
 export default function Calendar() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedDate = searchParams.get("date");
   const { user } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(readSavedDate);
+  const [selectedDate, setSelectedDate] = useState(() => parseCalendarDate(requestedDate));
   const [view, setView] = useState("day");
   const [appts, setAppts] = useState([]);
   const [hours, setHours] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerMonth, setPickerMonth] = useState(() => { const d = readSavedDate(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [pickerMonth, setPickerMonth] = useState(() => { const d = parseCalendarDate(requestedDate); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [selectedId, setSelectedId] = useState(null);
   const [selectedServices, setSelectedServices] = useState([]);
   const [completeOpen, setCompleteOpen] = useState(false);
@@ -104,7 +102,7 @@ export default function Calendar() {
   const swiped = useRef(false);
   const stripRef = useRef(null);
   const stripReady = useRef(false);
-  const [stripBase, setStripBase] = useState(() => addDays(startOfWeek(readSavedDate()), -84));
+  const [stripBase, setStripBase] = useState(() => addDays(startOfWeek(parseCalendarDate(requestedDate)), -84));
   const stripDates = useMemo(() => Array.from({ length: 175 }, (_, i) => addDays(stripBase, i)), [stripBase]);
 
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
@@ -201,8 +199,18 @@ const gridHeight = contentHeight + 24;
     setSelectedDate(next);
     setPickerMonth(new Date(next.getFullYear(), next.getMonth(), 1));
     setSelectedId(null);
-    try { localStorage.setItem(CALENDAR_DATE_KEY, fmtDate(next)); } catch {}
   }
+
+  useEffect(() => {
+    if (!requestedDate) return;
+    goDate(parseCalendarDate(requestedDate));
+  }, [requestedDate]);
+
+  useEffect(() => {
+    const openToday = () => goDate(new Date());
+    window.addEventListener("ritena:calendar-today", openToday);
+    return () => window.removeEventListener("ritena:calendar-today", openToday);
+  }, []);
   function shiftDay(n) { goDate(addDays(selectedDate, n)); }
   function shiftWeek(n) { goDate(addDays(selectedDate, n * 7)); }
   function swipeStart(e) { swiped.current = false; swipe.current = { x: e.clientX, y: e.clientY }; }

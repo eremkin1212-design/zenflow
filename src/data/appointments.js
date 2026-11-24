@@ -109,7 +109,16 @@ export async function getAppointmentServices(appointmentId){
 }
 export async function getAppointmentPayment(appointmentId){const {data,error}=await supabase.from("client_payments").select("id,amount,method,date,discount_percent").eq("appointment_id",appointmentId).order("id",{ascending:false}).limit(1).maybeSingle();if(error)throw error;return data;}
 
-export async function updateAppointmentPayment(paymentId){const {data,error}=await supabase.from("client_payments").select("*").eq("id",paymentId).single();if(error)throw error;return data;}
+export async function updateAppointmentPayment(paymentId, method){
+  if(!paymentId) throw new Error("Платёж не найден");
+  if(!["Наличные","Карта"].includes(method)) throw new Error("Выбери способ оплаты");
+  const {data,error}=await runWriteWithAuthRetry(()=>
+    supabase.from("client_payments").update({method}).eq("id",paymentId)
+      .in("method",["Наличные","Карта"]).select("id,amount,method,date,discount_percent").single()
+  );
+  if(error) throw error;
+  return data;
+}
 
 export async function createAppointment(payload){const normalized={...payload,full_price:Number(payload.full_price ?? payload.price ?? 0)};const {data,error}=await runWriteWithAuthRetry(()=>supabase.from("appointments").insert(normalized).select(SELECT).single());if(error)throw error;return data;}
 

@@ -107,15 +107,17 @@ export async function getAppointmentServices(appointmentId){
     throw error;
   }
 }
-export async function getAppointmentPayment(appointmentId){const {data,error}=await supabase.from("client_payments").select("id,amount,method,date,discount_percent").eq("appointment_id",appointmentId).order("id",{ascending:false}).limit(1).maybeSingle();if(error)throw error;return data;}
+export async function getAppointmentPayment(appointmentId){const {data,error}=await supabase.from("client_payments").select("id,amount,method,date,discount_percent,balance_used,balance_deposit").eq("appointment_id",appointmentId).order("id",{ascending:false}).limit(1).maybeSingle();if(error)throw error;return data;}
 
-export async function correctAppointmentPayment({appointmentId,serviceTotal,method,certificateNumber,topupMethod}){
+export async function correctAppointmentPayment({appointmentId,serviceTotal,method,certificateNumber,topupMethod,balanceUsed=0,balanceDeposit=0}){
   const {data,error,status}=await runWriteWithAuthRetry(()=>supabase.rpc("correct_appointment_payment",{
     p_appointment_id:appointmentId,
     p_service_total:Math.round(Number(serviceTotal)),
     p_method:method,
     p_certificate_number:method==="Сертификат"?String(certificateNumber||"").trim().toUpperCase():null,
     p_topup_method:method==="Сертификат"?(topupMethod||null):null,
+    p_balance_used:method==="Сертификат"?0:Math.round(Number(balanceUsed)),
+    p_balance_deposit:method==="Сертификат"?0:Math.round(Number(balanceDeposit))
   }));
   if(error){error.status=status;throw error;}
   return data;

@@ -91,7 +91,7 @@ begin
  end if;
  if p_method <> 'Сертификат' then
    if v_used>p_service_total then raise exception 'Нельзя списать с баланса больше стоимости сеанса'; end if;
-   if v_deposit>0 and (p_method<>'Наличные' or v_used>=p_service_total) then
+   if v_deposit>0 and p_method<>'Наличные' then
      raise exception 'Оставить сдачу на балансе можно только при оплате наличными';
    end if;
  else
@@ -102,12 +102,10 @@ begin
  from public.client_balance_transactions
  where owner_id=v_owner and client_id=v_a.client_id;
  v_available:=v_balance+v_p.balance_used-v_p.balance_deposit;
- if v_available<0 then
-   raise exception 'Сдача из старой оплаты уже использована. Для исправления пополни баланс на % ₽',
-    -v_available;
- end if;
- if v_used>v_available then
-   raise exception 'На балансе доступно % ₽ с учётом возврата старого списания',v_available;
+ -- A correction is valid if the resulting balance never becomes negative.
+ -- This also allows unchanged allocations when an earlier deposit was spent later.
+ if v_balance+v_p.balance_used-v_p.balance_deposit-v_used+v_deposit<0 then
+   raise exception 'Недостаточно средств для перерасчёта баланса. Уменьши списание или верни часть сдачи на баланс';
  end if;
  v_old_net:=v_p.balance_deposit-v_p.balance_used;
  v_new_net:=v_deposit-v_used;

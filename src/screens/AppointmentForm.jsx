@@ -298,10 +298,6 @@ export default function AppointmentForm(){
   if(paymentMethodDraft==="Карта"&&deposit>0){
     setError("Сдачу на баланс можно оставить только при оплате наличными");return;
   }
-  const possible=Math.max(0,clientBalance+Number(payment?.balance_used||0)-Number(payment?.balance_deposit||0));
-  if(paymentMethodDraft!=="Сертификат"&&used>possible){
-    setError(`С баланса можно списать не больше ${possible.toLocaleString("ru-RU")} ₽`);return;
-  }
   if(paymentMethodDraft==="Сертификат"&&!certificateNumberDraft.trim()){
     setError("Укажи номер сертификата или абонемента");return;
   }
@@ -341,14 +337,14 @@ export default function AppointmentForm(){
  <div className="grid grid-cols-3 gap-1.5">{["Наличные","Карта","Сертификат"].map(method=><button type="button" key={method} onClick={()=>{setPaymentMethodDraft(method);if(method!=="Наличные")setBalanceDepositDraft("0");if(method==="Сертификат")setBalanceUsedDraft("0")}} disabled={savingPaymentMethod} className="rounded-xl px-1 py-2.5 text-[11px] font-medium border" style={{background:paymentMethodDraft===method?"var(--moss)":"var(--surface-alt)",color:paymentMethodDraft===method?"var(--on-accent)":"var(--ink)",borderColor:paymentMethodDraft===method?"var(--moss)":"var(--line)"}}>{method}</button>)}</div>
  {paymentMethodDraft!=="Сертификат"&&<div className="mt-3 rounded-xl p-3 bg-[var(--surface-alt)]">
   <div className="text-xs font-medium mb-2">Внутренний баланс клиента</div>
-  <div className="text-[11px] text-[var(--ink-soft)] mb-2">Доступно с учётом возврата старого списания: {Math.max(0,clientBalance+Number(payment?.balance_used||0)-Number(payment?.balance_deposit||0)).toLocaleString("ru-RU")} ₽</div>
+  <div className="text-[11px] text-[var(--ink-soft)] mb-2">Баланс сейчас: {clientBalance.toLocaleString("ru-RU")} ₽ · старая оплата будет пересчитана автоматически</div>
   <label className="block text-xs text-[var(--ink-soft)]">Списать с баланса, ₽
    <input inputMode="numeric" value={balanceUsedDraft} onChange={e=>setBalanceUsedDraft(e.target.value.replace(/[^0-9]/g,""))} className="mt-1 w-full rounded-lg px-3 py-2 text-base font-mono bg-[var(--surface)] border border-[var(--line)] outline-none"/>
   </label>
   {paymentMethodDraft==="Наличные"&&<label className="block text-xs text-[var(--ink-soft)] mt-3">Сдача, оставленная на балансе, ₽
     <input inputMode="numeric" value={balanceDepositDraft} onChange={e=>setBalanceDepositDraft(e.target.value.replace(/[^0-9]/g,""))} className="mt-1 w-full rounded-lg px-3 py-2 text-base font-mono bg-[var(--surface)] border border-[var(--line)] outline-none"/>
   </label>}
-  <div className="mt-2 text-xs font-medium">К оплате {paymentMethodDraft==="Карта"?"картой":"наличными"}: {Math.max(0,Number(paymentAmountDraft||0)-Number(balanceUsedDraft||0)).toLocaleString("ru-RU")} ₽</div>
+  <div className="mt-2 text-xs font-medium">Получено {paymentMethodDraft==="Карта"?"картой":"наличными"}: {Math.max(0,Number(paymentAmountDraft||0)-Number(balanceUsedDraft||0)+(paymentMethodDraft==="Наличные"?Number(balanceDepositDraft||0):0)).toLocaleString("ru-RU")} ₽</div>
  </div>}
  {paymentMethodDraft==="Сертификат"&&<div className="mt-3">
   <label className="block text-xs text-[var(--ink-soft)]">Номер сертификата или абонемента

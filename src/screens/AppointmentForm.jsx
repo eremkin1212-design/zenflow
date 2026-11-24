@@ -55,6 +55,7 @@ export default function AppointmentForm(){
  const [paymentAmountDraft,setPaymentAmountDraft]=useState("");
  const [certificateNumberDraft,setCertificateNumberDraft]=useState("");
  const [topupMethodDraft,setTopupMethodDraft]=useState("Наличные");
+ const [balanceUsedDraft,setBalanceUsedDraft]=useState("0"),[balanceDepositDraft,setBalanceDepositDraft]=useState("0");
  const [scheduleLoaded,setScheduleLoaded]=useState(false);
  const [clientPrices,setClientPrices]=useState({}),[appointmentPrice,setAppointmentPrice]=useState("0"),[priceTouched,setPriceTouched]=useState(false),[rememberPrice,setRememberPrice]=useState(false);
  const [clientBalance,setClientBalance]=useState(0),[payOpen,setPayOpen]=useState(false),[payMethod,setPayMethod]=useState("Наличные"),[cashReceived,setCashReceived]=useState(""),[useBalance,setUseBalance]=useState(true),[keepChange,setKeepChange]=useState(false);
@@ -108,6 +109,7 @@ export default function AppointmentForm(){
       setPayment(p);
       if(p?.method)setPaymentMethodDraft(p.method.startsWith("Сертификат")?"Сертификат":p.method);
       if(p)setPaymentAmountDraft(String(p.amount));
+      if(p){setBalanceUsedDraft(String(p.balance_used||0));setBalanceDepositDraft(String(p.balance_deposit||0));}
       if(as?.length)setSelectedServices(as.map(x=>({id:x.service_id,duration:x.duration,price:Number(x.price??x.services?.price??0),basePrice:Number(x.services?.price??x.price??0),name:x.services?.name,color:x.services?.color})));
       else if(a.services)setSelectedServices([{...a.services,price:Number(a.price??a.services.price??0),basePrice:Number(a.services.price??a.price??0)}]);
       setAppointmentPrice(String(Number(a.price||0)));
@@ -267,8 +269,12 @@ export default function AppointmentForm(){
  }
  function openPaymentEditor(){
   const paidMethod=String(payment?.method||"");
-  setPaymentMethodDraft(paidMethod.startsWith("Сертификат")?"Сертификат":paidMethod);
+  const selected=paidMethod.startsWith("Сертификат")?"Сертификат":
+    paidMethod.includes("Карта")?"Карта":"Наличные";
+  setPaymentMethodDraft(selected);
   setPaymentAmountDraft(String(payment?.amount??price));
+  setBalanceUsedDraft(String(payment?.balance_used||0));
+  setBalanceDepositDraft(String(payment?.balance_deposit||0));
   setCertificateNumberDraft(paidMethod.match(/RT-[0-9]+/i)?.[0]||"");
   setTopupMethodDraft("Наличные");
   setEditingPayment(true);
@@ -277,11 +283,24 @@ export default function AppointmentForm(){
  async function savePaymentMethod(){
   const value=paymentAmountDraft.trim();
   const amount=Number(value);
+  const used=paymentMethodDraft==="Сертификат"?0:Number(balanceUsedDraft);
+  const deposit=paymentMethodDraft==="Сертификат"?0:Number(balanceDepositDraft);
   if(!value||!Number.isSafeInteger(amount)||amount<0||amount>10000000){
     setError("Укажи корректную сумму оплаты");return;
   }
   if(!["Наличные","Карта","Сертификат"].includes(paymentMethodDraft)){
     setError("Выбери способ оплаты");return;
+  }
+  if(!Number.isSafeInteger(used)||used<0||used>amount
+    ||!Number.isSafeInteger(deposit)||deposit<0||deposit>10000000){
+    setError("Проверь сумму списания или пополнения баланса");return;
+  }
+  if(paymentMethodDraft==="Карта"&&deposit>0){
+    setError("Сдачу на баланс можно оставить только при оплате наличными");return;
+  }
+  const possible=Math.max(0,clientBalance+Number(payment?.balance_used||0)-Number(payment?.balance_deposit||0));
+  if(paymentMethodDraft!=="Сертификат"&&used>possible){
+    setError(`С баланса можно списать не больше ${possible.toLocaleString("ru-RU")} ₽`);return;
   }
   if(paymentMethodDraft==="Сертификат"&&!certificateNumberDraft.trim()){
     setError("Укажи номер сертификата или абонемента");return;
@@ -291,10 +310,12 @@ export default function AppointmentForm(){
     await correctAppointmentPayment({
       appointmentId:id,serviceTotal:amount,method:paymentMethodDraft,
       certificateNumber:certificateNumberDraft,
-      topupMethod:paymentMethodDraft==="Сертификат"?topupMethodDraft:null
+      topupMethod:paymentMethodDraft==="Сертификат"?topupMethodDraft:null,
+      balanceUsed:used,balanceDeposit:deposit
     });
-    const updated=await getAppointmentPayment(id);
+    const [updated,newBalance]=await Promise.all([getAppointmentPayment(id),getClientBalance(client.id)]);
     setPayment(updated);
+    setClientBalance(newBalance);
     setAppointmentPrice(String(amount));
     setPriceTouched(true);
     setEditingPayment(false);
@@ -311,13 +332,24 @@ export default function AppointmentForm(){
  if(loading)return <div className="min-h-screen bg-[var(--paper)] flex items-center justify-center text-sm text-[var(--ink-soft)]">Загружаем…</div>;
  return <><div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] font-sans"><div className="max-w-sm mx-auto pb-28">
   <div className="flex items-center justify-between px-5 pt-7 pb-2"><button onClick={()=>navigate(-1)} className="rounded-full p-2.5 bg-[var(--surface-alt)]"><ArrowLeft size={18}/></button><div className="text-lg font-serif">{id?"Редактирование записи":"Новая запись"}</div><ThemeToggle/></div>
-  {payment&&<div className="mx-5 mt-4 rounded-2xl p-3 bg-[var(--moss-soft)] text-sm"><div className="flex items-center justify-between"><span className="font-medium">Оплачено</span><span className="font-mono">{Number(payment.amount).toLocaleString("ru-RU")} ₽</span></div><div className="mt-1 flex items-center justify-between gap-2"><span className="text-xs text-[var(--ink-soft)]">{payment.method}</span>{(["Наличные","Карта"].includes(payment.method)||String(payment.method).startsWith("Сертификат"))&&!editingPayment&&<button type="button" onClick={openPaymentEditor} className="text-xs font-medium underline underline-offset-2 text-[var(--moss)]">Изменить оплату</button>}</div>{editingPayment&&<div className="mt-3 rounded-xl p-3 bg-[var(--surface)] border border-[var(--line)]">
+  {payment&&<div className="mx-5 mt-4 rounded-2xl p-3 bg-[var(--moss-soft)] text-sm"><div className="flex items-center justify-between"><span className="font-medium">Оплачено</span><span className="font-mono">{Number(payment.amount).toLocaleString("ru-RU")} ₽</span></div><div className="mt-1 flex items-center justify-between gap-2"><span className="text-xs text-[var(--ink-soft)]">{payment.method}</span>{!editingPayment&&<button type="button" onClick={openPaymentEditor} className="text-xs font-medium underline underline-offset-2 text-[var(--moss)]">Изменить оплату</button>}</div>{editingPayment&&<div className="mt-3 rounded-xl p-3 bg-[var(--surface)] border border-[var(--line)]">
  <div className="text-xs font-medium mb-2">Исправить проведённую оплату</div>
- <label className="block text-xs text-[var(--ink-soft)]">Сумма оплаты, ₽
+ <label className="block text-xs text-[var(--ink-soft)]">Стоимость сеанса, ₽
   <input inputMode="numeric" value={paymentAmountDraft} onChange={e=>setPaymentAmountDraft(e.target.value.replace(/[^0-9]/g,""))} className="mt-1 w-full rounded-xl px-3 py-2.5 text-base font-mono bg-[var(--surface-alt)] border border-[var(--line)] outline-none"/>
  </label>
  <div className="text-xs text-[var(--ink-soft)] mt-3 mb-1.5">Способ оплаты</div>
- <div className="grid grid-cols-3 gap-1.5">{["Наличные","Карта","Сертификат"].map(method=><button type="button" key={method} onClick={()=>setPaymentMethodDraft(method)} disabled={savingPaymentMethod} className="rounded-xl px-1 py-2.5 text-[11px] font-medium border" style={{background:paymentMethodDraft===method?"var(--moss)":"var(--surface-alt)",color:paymentMethodDraft===method?"var(--on-accent)":"var(--ink)",borderColor:paymentMethodDraft===method?"var(--moss)":"var(--line)"}}>{method}</button>)}</div>
+ <div className="grid grid-cols-3 gap-1.5">{["Наличные","Карта","Сертификат"].map(method=><button type="button" key={method} onClick={()=>{setPaymentMethodDraft(method);if(method!=="Наличные")setBalanceDepositDraft("0");if(method==="Сертификат")setBalanceUsedDraft("0")}} disabled={savingPaymentMethod} className="rounded-xl px-1 py-2.5 text-[11px] font-medium border" style={{background:paymentMethodDraft===method?"var(--moss)":"var(--surface-alt)",color:paymentMethodDraft===method?"var(--on-accent)":"var(--ink)",borderColor:paymentMethodDraft===method?"var(--moss)":"var(--line)"}}>{method}</button>)}</div>
+ {paymentMethodDraft!=="Сертификат"&&<div className="mt-3 rounded-xl p-3 bg-[var(--surface-alt)]">
+  <div className="text-xs font-medium mb-2">Внутренний баланс клиента</div>
+  <div className="text-[11px] text-[var(--ink-soft)] mb-2">Доступно с учётом возврата старого списания: {Math.max(0,clientBalance+Number(payment?.balance_used||0)-Number(payment?.balance_deposit||0)).toLocaleString("ru-RU")} ₽</div>
+  <label className="block text-xs text-[var(--ink-soft)]">Списать с баланса, ₽
+   <input inputMode="numeric" value={balanceUsedDraft} onChange={e=>setBalanceUsedDraft(e.target.value.replace(/[^0-9]/g,""))} className="mt-1 w-full rounded-lg px-3 py-2 text-base font-mono bg-[var(--surface)] border border-[var(--line)] outline-none"/>
+  </label>
+  {paymentMethodDraft==="Наличные"&&<label className="block text-xs text-[var(--ink-soft)] mt-3">Сдача, оставленная на балансе, ₽
+    <input inputMode="numeric" value={balanceDepositDraft} onChange={e=>setBalanceDepositDraft(e.target.value.replace(/[^0-9]/g,""))} className="mt-1 w-full rounded-lg px-3 py-2 text-base font-mono bg-[var(--surface)] border border-[var(--line)] outline-none"/>
+  </label>}
+  <div className="mt-2 text-xs font-medium">К оплате {paymentMethodDraft==="Карта"?"картой":"наличными"}: {Math.max(0,Number(paymentAmountDraft||0)-Number(balanceUsedDraft||0)).toLocaleString("ru-RU")} ₽</div>
+ </div>}
  {paymentMethodDraft==="Сертификат"&&<div className="mt-3">
   <label className="block text-xs text-[var(--ink-soft)]">Номер сертификата или абонемента
    <input value={certificateNumberDraft} onChange={e=>setCertificateNumberDraft(e.target.value.toUpperCase())} placeholder="RT-000001" autoCapitalize="characters" className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm font-mono bg-[var(--surface-alt)] border border-[var(--line)] outline-none"/>
@@ -325,7 +357,7 @@ export default function AppointmentForm(){
   <div className="text-xs text-[var(--ink-soft)] mt-3 mb-1">Если денег на сертификате не хватит, способ доплаты</div>
   <div className="grid grid-cols-2 gap-2">{["Наличные","Карта"].map(method=><button type="button" key={method} onClick={()=>setTopupMethodDraft(method)} disabled={savingPaymentMethod} className="rounded-xl py-2 text-xs border" style={{background:topupMethodDraft===method?"var(--moss)":"var(--surface-alt)",color:topupMethodDraft===method?"var(--on-accent)":"var(--ink)",borderColor:topupMethodDraft===method?"var(--moss)":"var(--line)"}}>{method}</button>)}</div>
  </div>}
- <div className="text-xs mt-3 text-[var(--ink-soft)]">Исправление заменит старый платёж и скорректирует доход. При смене на сертификат остаток спишется один раз. Если оплата использовала баланс клиента, приложение попросит обратиться в поддержку.</div>
+ <div className="text-xs mt-3 text-[var(--ink-soft)]">Изменение пересчитает сумму, списания и сдачу на балансе клиента. Предыдущие движения сохраняются в истории с корректировкой разницы. Сертификат будет списан или восстановлен без двойного начисления.</div>
  <div className="mt-3 flex gap-2"><button type="button" disabled={savingPaymentMethod} onClick={()=>setEditingPayment(false)} className="flex-1 rounded-xl py-2.5 text-xs bg-[var(--surface-alt)]">Отмена</button><button type="button" disabled={savingPaymentMethod} onClick={savePaymentMethod} className="flex-1 rounded-xl py-2.5 text-xs font-medium bg-[var(--moss)] text-[var(--on-accent)]" style={{opacity:savingPaymentMethod?.5:1}}>{savingPaymentMethod?"Сохраняем…":"Сохранить"}</button></div>
  </div>}<div className="mt-2 pt-2 border-t border-[var(--line)]"><div className="text-xs font-medium mb-1">Услуги</div><div className="text-xs text-[var(--ink-soft)]">{serviceNames.length ? serviceNames.join(" · ") : "Услуги не найдены"}</div><div className="text-xs mt-1 text-[var(--ink-soft)]">{selectedServices.length} {selectedServices.length===1?"услуга":"услуг"} · {duration} мин</div></div><div className="text-xs mt-2 text-[var(--ink-soft)]">Оплата сохраняется даже при изменении даты, времени или состава услуг.</div></div>}
   <div className="mx-5 mt-5"><div className="text-sm font-medium mb-2 text-[var(--ink-soft)]">Клиент</div>{client?<div className="rounded-2xl p-3.5 flex justify-between bg-[var(--moss-soft)]"><div className="text-sm font-medium">{client.name}<div className="mt-1 text-xs text-[var(--ink-soft)]">Баланс: {clientBalance.toLocaleString("ru-RU")} ₽</div><div className="mt-1.5"><HighlightsBanner text={clients.find((c) => c.id === client.id)?.highlights} compact /></div></div><button onClick={()=>setClient(null)} className="text-xs text-[var(--moss)]">Изменить</button></div>:<><div className="flex items-center gap-2 rounded-2xl px-3.5 py-2.5 bg-[var(--surface)] border border-[var(--line)]"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Поиск клиента" className="flex-1 bg-transparent outline-none text-sm"/></div><div className="flex gap-2 mt-2 overflow-x-auto">{filtered.map(c=><button key={c.id} onClick={()=>setClient({id:c.id,name:c.name})} className="shrink-0 rounded-full px-3 py-2 text-sm bg-[var(--surface-alt)]">{c.name}</button>)}<button onClick={()=>setQuick(true)} className="shrink-0 rounded-full px-3 py-2 text-sm border border-dashed border-[var(--line)]"><Plus size={14} className="inline"/> Новый</button></div>{quick&&<div className="mt-2 rounded-2xl p-3 bg-[var(--surface)] border border-[var(--line)]">{canPickPhoneContact()&&<button type="button" onClick={pickQuickContact} disabled={pickingQuickContact} className="w-full rounded-xl p-2.5 mb-2 flex items-center justify-center gap-2 bg-[var(--moss-soft)] text-sm font-medium" style={{opacity:pickingQuickContact?.6:1}}><UserPlus size={15}/>{pickingQuickContact?"Открываем контакты…":"Выбрать из контактов"}</button>}<input value={quickName} onChange={e=>setQuickName(e.target.value)} placeholder="Имя" className="w-full rounded-xl p-2 mb-2 bg-[var(--surface-alt)] outline-none"/><input value={quickPhone} onChange={e=>setQuickPhone(e.target.value)} placeholder="Телефон" className="w-full rounded-xl p-2 mb-2 bg-[var(--surface-alt)] outline-none"/><div className="flex gap-2"><button onClick={()=>setQuick(false)} className="flex-1 rounded-full py-2 bg-[var(--surface-alt)]">Отмена</button><button onClick={addQuick} disabled={pickingQuickContact} className="flex-1 rounded-full py-2 bg-[var(--moss)] text-[var(--on-accent)]" style={{opacity:pickingQuickContact?.6:1}}>Сохранить</button></div></div>}</>}</div>
